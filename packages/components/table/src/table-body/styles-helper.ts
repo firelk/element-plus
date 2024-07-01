@@ -1,9 +1,10 @@
+// @ts-nocheck
 import { inject } from 'vue'
 import { useNamespace } from '@element-plus/hooks'
 import {
+  ensurePosition,
   getFixedColumnOffset,
   getFixedColumnsClass,
-  ensurePosition,
 } from '../util'
 import { TABLE_INJECTION_KEY } from '../tokens'
 import type { TableColumnCtx } from '../table-column/defaults'
@@ -47,11 +48,6 @@ function useStyles<T>(props: Partial<TableBodyProps<T>>) {
         })
       )
     }
-
-    if (props.store.states.expandRows.value.indexOf(row) > -1) {
-      classes.push('expanded')
-    }
-
     return classes
   }
 
@@ -71,9 +67,11 @@ function useStyles<T>(props: Partial<TableBodyProps<T>>) {
         column,
       })
     }
-    const fixedStyle = column.isSubColumn
-      ? null
-      : getFixedColumnOffset(columnIndex, props?.fixed, props.store)
+    const fixedStyle = getFixedColumnOffset(
+      columnIndex,
+      props?.fixed,
+      props.store
+    )
     ensurePosition(fixedStyle, 'left')
     ensurePosition(fixedStyle, 'right')
     return Object.assign({}, cellStyles, fixedStyle)
@@ -83,11 +81,17 @@ function useStyles<T>(props: Partial<TableBodyProps<T>>) {
     rowIndex: number,
     columnIndex: number,
     row: T,
-    column: TableColumnCtx<T>
+    column: TableColumnCtx<T>,
+    offset: number
   ) => {
-    const fixedClasses = column.isSubColumn
-      ? []
-      : getFixedColumnsClass(ns.b(), columnIndex, props?.fixed, props.store)
+    const fixedClasses = getFixedColumnsClass(
+      ns.b(),
+      columnIndex,
+      props?.fixed,
+      props.store,
+      undefined,
+      offset
+    )
     const classes = [column.id, column.align, column.className, ...fixedClasses]
     const cellClassName = parent?.props.cellClassName
     if (typeof cellClassName === 'string') {
@@ -103,7 +107,7 @@ function useStyles<T>(props: Partial<TableBodyProps<T>>) {
       )
     }
     classes.push(ns.e('cell'))
-    return classes.join(' ')
+    return classes.filter((className) => Boolean(className)).join(' ')
   }
   const getSpan = (
     row: T,

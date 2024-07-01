@@ -4,31 +4,34 @@
     :class="dropdownKls"
     :style="rovingFocusGroupRootStyle"
     :tabindex="-1"
-    role="menu"
+    :role="role"
+    :aria-labelledby="triggerId"
     @blur="onBlur"
     @focus="onFocus"
-    @keydown="handleKeydown"
-    @mousedown="onMousedown"
+    @keydown.self="handleKeydown"
+    @mousedown.self="onMousedown"
   >
-    <slot></slot>
+    <slot />
   </ul>
 </template>
 <script lang="ts">
+// @ts-nocheck
 import { computed, defineComponent, inject, unref } from 'vue'
-import { EVENT_CODE } from '@element-plus/utils/aria'
+import { composeEventHandlers, composeRefs } from '@element-plus/utils'
+import { EVENT_CODE } from '@element-plus/constants'
 import { FOCUS_TRAP_INJECTION_KEY } from '@element-plus/components/focus-trap'
 import {
   ROVING_FOCUS_COLLECTION_INJECTION_KEY,
   ROVING_FOCUS_GROUP_INJECTION_KEY,
   focusFirst,
 } from '@element-plus/components/roving-focus-group'
-import { composeRefs, composeEventHandlers } from '@element-plus/utils/dom'
+import { useNamespace } from '@element-plus/hooks'
 import { DROPDOWN_INJECTION_KEY } from './tokens'
 import {
   DROPDOWN_COLLECTION_INJECTION_KEY,
-  dropdownMenuProps,
   FIRST_LAST_KEYS,
   LAST_KEYS,
+  dropdownMenuProps,
 } from './dropdown'
 import { useDropdown } from './useDropdown'
 
@@ -36,6 +39,7 @@ export default defineComponent({
   name: 'ElDropdownMenu',
   props: dropdownMenuProps,
   setup(props) {
+    const ns = useNamespace('dropdown')
     const { _elDropdownSize } = useDropdown()
     const size = _elDropdownSize.value
 
@@ -44,7 +48,10 @@ export default defineComponent({
       undefined
     )!
 
-    const { contentRef } = inject(DROPDOWN_INJECTION_KEY, undefined)!
+    const { contentRef, role, triggerId } = inject(
+      DROPDOWN_INJECTION_KEY,
+      undefined
+    )!
 
     const { collectionRef: dropdownCollectionRef, getItems } = inject(
       DROPDOWN_COLLECTION_INJECTION_KEY,
@@ -66,10 +73,7 @@ export default defineComponent({
     )!
 
     const dropdownKls = computed(() => {
-      return [
-        'el-dropdown-menu',
-        size.value && `el-dropdown-menu--${size.value}`,
-      ]
+      return [ns.b('menu'), ns.bm('menu', size?.value)]
     })
 
     const dropdownListWrapperRef = composeRefs(
@@ -123,6 +127,8 @@ export default defineComponent({
       rovingFocusGroupRootStyle,
       tabIndex,
       dropdownKls,
+      role,
+      triggerId,
       dropdownListWrapperRef,
       handleKeydown,
       onBlur,

@@ -30,7 +30,7 @@ onMounted(async () => {
     )
     releases.value = data
     currentRelease.value = data[0]
-  } catch (e) {
+  } catch {
     releases.value = []
     currentRelease.value = undefined
     // do something
@@ -49,7 +49,7 @@ onMounted(async () => {
           <ElSelect
             :model-value="currentRelease.name"
             :placeholder="changelog['select-version']"
-            style="min-width: 200px"
+            style="width: 200px"
             @change="onVersionChange"
           >
             <ElOption

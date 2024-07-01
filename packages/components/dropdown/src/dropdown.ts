@@ -1,20 +1,17 @@
-import { EVENT_CODE } from '@element-plus/utils/aria'
-import {
-  buildProps,
-  definePropType,
-  iconPropType,
-} from '@element-plus/utils-v2'
+// @ts-nocheck
+import { buildProps, definePropType, iconPropType } from '@element-plus/utils'
+import { EVENT_CODE } from '@element-plus/constants'
 import { createCollectionWithScope } from '@element-plus/components/collection'
 import {
-  useTooltipTriggerProps,
   useTooltipContentProps,
+  useTooltipTriggerProps,
 } from '@element-plus/components/tooltip'
-import type { Options } from '@popperjs/core'
 
-import type { ButtonType } from '@element-plus/components/button'
+import type { Options } from '@popperjs/core'
+import type { ButtonProps, ButtonType } from '@element-plus/components/button'
 import type { Placement } from '@element-plus/components/popper'
 import type { ComponentInternalInstance, ComputedRef } from 'vue'
-import type { Nullable } from '@element-plus/utils/types'
+import type { Nullable } from '@element-plus/utils'
 
 export interface IElDropdownInstance {
   instance?: ComponentInternalInstance
@@ -28,59 +25,70 @@ export interface IElDropdownInstance {
   triggerElm?: ComputedRef<Nullable<HTMLButtonElement>>
 }
 
-export const dropdownProps = {
+export const dropdownProps = buildProps({
   trigger: useTooltipTriggerProps.trigger,
-
   effect: {
     ...useTooltipContentProps.effect,
     default: 'light',
   },
-  ...buildProps({
-    type: {
-      type: definePropType<ButtonType>(String),
-    },
-    placement: {
-      type: definePropType<Placement>(String),
-      default: 'bottom',
-    },
-    popperOptions: {
-      type: definePropType<Partial<Options>>(Object),
-      default: () => ({}),
-    },
-    size: {
-      type: String,
-      default: '',
-    },
-    splitButton: Boolean,
-    hideOnClick: {
-      type: Boolean,
-      default: true,
-    },
-    loop: {
-      type: Boolean,
-    },
-    showTimeout: {
-      type: Number,
-      default: 150,
-    },
-    hideTimeout: {
-      type: Number,
-      default: 150,
-    },
-    tabindex: {
-      type: definePropType<number | string>([Number, String]),
-      default: 0,
-    },
-    maxHeight: {
-      type: definePropType<number | string>([Number, String]),
-      default: '',
-    },
-    popperClass: {
-      type: String,
-      default: '',
-    },
-  } as const),
-} as const
+  type: {
+    type: definePropType<ButtonType>(String),
+  },
+  placement: {
+    type: definePropType<Placement>(String),
+    default: 'bottom',
+  },
+  popperOptions: {
+    type: definePropType<Partial<Options>>(Object),
+    default: () => ({}),
+  },
+  id: String,
+  size: {
+    type: String,
+    default: '',
+  },
+  splitButton: Boolean,
+  hideOnClick: {
+    type: Boolean,
+    default: true,
+  },
+  loop: {
+    type: Boolean,
+    default: true,
+  },
+  showTimeout: {
+    type: Number,
+    default: 150,
+  },
+  hideTimeout: {
+    type: Number,
+    default: 150,
+  },
+  tabindex: {
+    type: definePropType<number | string>([Number, String]),
+    default: 0,
+  },
+  maxHeight: {
+    type: definePropType<number | string>([Number, String]),
+    default: '',
+  },
+  popperClass: {
+    type: String,
+    default: '',
+  },
+  disabled: {
+    type: Boolean,
+    default: false,
+  },
+  role: {
+    type: String,
+    default: 'menu',
+  },
+  buttonProps: {
+    type: definePropType<ButtonProps>(Object),
+  },
+  teleported: useTooltipContentProps.teleported,
+} as const)
 
 export const dropdownItemProps = buildProps({
   command: {

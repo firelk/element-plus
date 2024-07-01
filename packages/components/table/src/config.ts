@@ -1,8 +1,9 @@
+// @ts-nocheck
 import { h } from 'vue'
 import ElCheckbox from '@element-plus/components/checkbox'
 import { ElIcon } from '@element-plus/components/icon'
 import { ArrowRight, Loading } from '@element-plus/icons-vue'
-import { getPropByPath } from '@element-plus/utils/util'
+import { getProp } from '@element-plus/utils'
 
 import type { VNode } from 'vue'
 import type { TableColumnCtx } from './table-column/defaults'
@@ -45,7 +46,7 @@ export const getDefaultClassName = (type) => {
 // 这些选项不应该被覆盖
 export const cellForced = {
   selection: {
-    renderHeader<T>({ store }: { store: Store<T> }) {
+    renderHeader<T>({ store, column }: { store: Store<T> }) {
       function isDisabled() {
         return store.states.data.value && store.states.data.value.length === 0
       }
@@ -57,6 +58,7 @@ export const cellForced = {
           !store.states.isAllSelected.value,
         'onUpdate:modelValue': store.toggleAllSelection,
         modelValue: store.states.isAllSelected.value,
+        ariaLabel: column.label,
       })
     },
     renderCell<T>({
@@ -80,6 +82,7 @@ export const cellForced = {
         },
         onClick: (event: Event) => event.stopPropagation(),
         modelValue: store.isSelected(row),
+        ariaLabel: column.label,
       })
     },
     sortable: false,
@@ -112,10 +115,18 @@ export const cellForced = {
     renderHeader<T>({ column }: { column: TableColumnCtx<T> }) {
       return column.label || ''
     },
-    renderCell<T>({ row, store }: { row: T; store: Store<T> }) {
+    renderCell<T>({
+      row,
+      store,
+      expanded,
+    }: {
+      row: T
+      store: Store<T>
+      expanded: boolean
+    }) {
       const { ns } = store
       const classes = [ns.e('expand-icon')]
-      if (store.states.expandRows.value.indexOf(row) > -1) {
+      if (expanded) {
         classes.push(ns.em('expand-icon', 'expanded'))
       }
       const callback = function (e: Event) {
@@ -156,29 +167,44 @@ export function defaultRenderCell<T>({
   $index: number
 }) {
   const property = column.property
-  const value = property && getPropByPath(row, property, false).v
+  const value = property && getProp(row, property).value
   if (column && column.formatter) {
     return column.formatter(row, column, value, $index)
   }
   return value?.toString?.() || ''
 }
 
-export function treeCellPrefix<T>({
-  row,
-  treeNode,
-  store,
-}: {
-  row: T
-  treeNode: TreeNode
-  store: Store<T>
-}) {
-  if (!treeNode) return null
+export function treeCellPrefix<T>(
+  {
+    row,
+    treeNode,
+    store,
+  }: {
+    row: T
+    treeNode: TreeNode
+    store: Store<T>
+  },
+  createPlaceholder = false
+) {
+  const { ns } = store
+  if (!treeNode) {
+    if (createPlaceholder) {
+      return [
+        h('span', {
+          class: ns.e('placeholder'),
+        }),
+      ]
+    }
+    return null
+  }
   const ele: VNode[] = []
   const callback = function (e) {
     e.stopPropagation()
+    if (treeNode.loading) {
+      return
+    }
     store.loadOrToggle(row)
   }
-  const { ns } = store
   if (treeNode.indent) {
     ele.push(
       h('span', {

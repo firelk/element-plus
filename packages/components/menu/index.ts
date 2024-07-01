@@ -1,4 +1,4 @@
-import { withInstall, withNoopInstall } from '@element-plus/utils-v2'
+import { withInstall, withNoopInstall } from '@element-plus/utils'
 
 import Menu from './src/menu'
 import MenuItem from './src/menu-item.vue'
@@ -20,3 +20,4 @@ export * from './src/menu-item'
 export * from './src/menu-item-group'
 export * from './src/sub-menu'
 export * from './src/types'
+export * from './src/instance'

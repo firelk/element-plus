@@ -1,13 +1,14 @@
+// @ts-nocheck
 import { nextTick } from 'vue'
 import { isFunction } from '@vue/shared'
 import { throttle } from 'lodash-unified'
 import {
-  getScrollContainer,
   getOffsetTopDistance,
-} from '@element-plus/utils/dom'
-import { throwError } from '@element-plus/utils-v2'
+  getScrollContainer,
+  throwError,
+} from '@element-plus/utils'
 
-import type { ObjectDirective, ComponentPublicInstance } from 'vue'
+import type { ComponentPublicInstance, ObjectDirective } from 'vue'
 
 export const SCOPE = 'ElInfiniteScroll'
 export const CHECK_INTERVAL = 50
@@ -161,6 +162,7 @@ const InfiniteScroll: ObjectDirective<
     container.addEventListener('scroll', onScroll)
   },
   unmounted(el) {
+    if (!el[SCOPE]) return
     const { container, onScroll } = el[SCOPE]
 
     container?.removeEventListener('scroll', onScroll)
@@ -169,10 +171,11 @@ const InfiniteScroll: ObjectDirective<
   async updated(el) {
     if (!el[SCOPE]) {
       await nextTick()
-    }
-    const { containerEl, cb, observer } = el[SCOPE]
-    if (containerEl.clientHeight && observer) {
-      checkFull(el, cb)
+    } else {
+      const { containerEl, cb, observer } = el[SCOPE]
+      if (containerEl.clientHeight && observer) {
+        checkFull(el, cb)
+      }
     }
   },
 }

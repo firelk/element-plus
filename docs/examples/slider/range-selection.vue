@@ -1,6 +1,6 @@
 <template>
   <div class="slider-demo-block">
-    <el-slider v-model="value" range show-stops :max="10"> </el-slider>
+    <el-slider v-model="value" range show-stops :max="10" />
   </div>
 </template>
 
@@ -9,8 +9,10 @@ import { ref } from 'vue'
 
 const value = ref([4, 8])
 </script>
+
 <style scoped>
 .slider-demo-block {
+  max-width: 600px;
   display: flex;
   align-items: center;
 }

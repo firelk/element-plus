@@ -1,20 +1,29 @@
 <template>
   <el-form
     ref="ruleFormRef"
+    style="max-width: 600px"
     :model="ruleForm"
     :rules="rules"
-    label-width="120px"
+    label-width="auto"
     class="demo-ruleForm"
     :size="formSize"
+    status-icon
   >
     <el-form-item label="Activity name" prop="name">
-      <el-input v-model="ruleForm.name"></el-input>
+      <el-input v-model="ruleForm.name" />
     </el-form-item>
     <el-form-item label="Activity zone" prop="region">
       <el-select v-model="ruleForm.region" placeholder="Activity zone">
-        <el-option label="Zone one" value="shanghai"></el-option>
-        <el-option label="Zone two" value="beijing"></el-option>
+        <el-option label="Zone one" value="shanghai" />
+        <el-option label="Zone two" value="beijing" />
       </el-select>
+    </el-form-item>
+    <el-form-item label="Activity count" prop="count">
+      <el-select-v2
+        v-model="ruleForm.count"
+        placeholder="Activity count"
+        :options="options"
+      />
     </el-form-item>
     <el-form-item label="Activity time" required>
       <el-col :span="11">
@@ -22,9 +31,10 @@
           <el-date-picker
             v-model="ruleForm.date1"
             type="date"
+            aria-label="Pick a date"
             placeholder="Pick a date"
             style="width: 100%"
-          ></el-date-picker>
+          />
         </el-form-item>
       </el-col>
       <el-col class="text-center" :span="2">
@@ -34,36 +44,48 @@
         <el-form-item prop="date2">
           <el-time-picker
             v-model="ruleForm.date2"
+            aria-label="Pick a time"
             placeholder="Pick a time"
             style="width: 100%"
-          ></el-time-picker>
+          />
         </el-form-item>
       </el-col>
     </el-form-item>
     <el-form-item label="Instant delivery" prop="delivery">
-      <el-switch v-model="ruleForm.delivery"></el-switch>
+      <el-switch v-model="ruleForm.delivery" />
+    </el-form-item>
+    <el-form-item label="Activity location" prop="location">
+      <el-segmented v-model="ruleForm.location" :options="locationOptions" />
     </el-form-item>
     <el-form-item label="Activity type" prop="type">
       <el-checkbox-group v-model="ruleForm.type">
-        <el-checkbox label="Online activities" name="type"></el-checkbox>
-        <el-checkbox label="Promotion activities" name="type"></el-checkbox>
-        <el-checkbox label="Offline activities" name="type"></el-checkbox>
-        <el-checkbox label="Simple brand exposure" name="type"></el-checkbox>
+        <el-checkbox value="Online activities" name="type">
+          Online activities
+        </el-checkbox>
+        <el-checkbox value="Promotion activities" name="type">
+          Promotion activities
+        </el-checkbox>
+        <el-checkbox value="Offline activities" name="type">
+          Offline activities
+        </el-checkbox>
+        <el-checkbox value="Simple brand exposure" name="type">
+          Simple brand exposure
+        </el-checkbox>
       </el-checkbox-group>
     </el-form-item>
     <el-form-item label="Resources" prop="resource">
       <el-radio-group v-model="ruleForm.resource">
-        <el-radio label="Sponsorship"></el-radio>
-        <el-radio label="Venue"></el-radio>
+        <el-radio value="Sponsorship">Sponsorship</el-radio>
+        <el-radio value="Venue">Venue</el-radio>
       </el-radio-group>
     </el-form-item>
     <el-form-item label="Activity form" prop="desc">
-      <el-input v-model="ruleForm.desc" type="textarea"></el-input>
+      <el-input v-model="ruleForm.desc" type="textarea" />
     </el-form-item>
     <el-form-item>
-      <el-button type="primary" @click="submitForm(ruleFormRef)"
-        >Create</el-button
-      >
+      <el-button type="primary" @click="submitForm(ruleFormRef)">
+        Create
+      </el-button>
       <el-button @click="resetForm(ruleFormRef)">Reset</el-button>
     </el-form-item>
   </el-form>
@@ -71,41 +93,54 @@
 
 <script lang="ts" setup>
 import { reactive, ref } from 'vue'
-import type { ElForm } from 'element-plus'
+import type { ComponentSize, FormInstance, FormRules } from 'element-plus'
 
-type FormInstance = InstanceType<typeof ElForm>
+interface RuleForm {
+  name: string
+  region: string
+  count: string
+  date1: string
+  date2: string
+  delivery: boolean
+  location: string
+  type: string[]
+  resource: string
+  desc: string
+}
 
-const formSize = ref('')
+const formSize = ref<ComponentSize>('default')
 const ruleFormRef = ref<FormInstance>()
-const ruleForm = reactive({
-  name: '',
+const ruleForm = reactive<RuleForm>({
+  name: 'Hello',
   region: '',
+  count: '',
   date1: '',
   date2: '',
   delivery: false,
+  location: '',
   type: [],
   resource: '',
   desc: '',
 })
 
-const rules = reactive({
+const locationOptions = ['Home', 'Company', 'School']
+
+const rules = reactive<FormRules<RuleForm>>({
   name: [
-    {
-      required: true,
-      message: 'Please input Activity name',
-      trigger: 'blur',
-    },
-    {
-      min: 3,
-      max: 5,
-      message: 'Length should be 3 to 5',
-      trigger: 'blur',
-    },
+    { required: true, message: 'Please input Activity name', trigger: 'blur' },
+    { min: 3, max: 5, message: 'Length should be 3 to 5', trigger: 'blur' },
   ],
   region: [
     {
       required: true,
       message: 'Please select Activity zone',
+      trigger: 'change',
+    },
+  ],
+  count: [
+    {
+      required: true,
+      message: 'Please select Activity count',
       trigger: 'change',
     },
   ],
@@ -125,6 +160,13 @@ const rules = reactive({
       trigger: 'change',
     },
   ],
+  location: [
+    {
+      required: true,
+      message: 'Please select a location',
+      trigger: 'change',
+    },
+  ],
   type: [
     {
       type: 'array',
@@ -141,22 +183,17 @@ const rules = reactive({
     },
   ],
   desc: [
-    {
-      required: true,
-      message: 'Please input activity form',
-      trigger: 'blur',
-    },
+    { required: true, message: 'Please input activity form', trigger: 'blur' },
   ],
 })
 
-const submitForm = (formEl: FormInstance | undefined) => {
+const submitForm = async (formEl: FormInstance | undefined) => {
   if (!formEl) return
-  formEl.validate((valid) => {
+  await formEl.validate((valid, fields) => {
     if (valid) {
       console.log('submit!')
     } else {
-      console.log('error submit!')
-      return false
+      console.log('error submit!', fields)
     }
   })
 }
@@ -165,4 +202,9 @@ const resetForm = (formEl: FormInstance | undefined) => {
   if (!formEl) return
   formEl.resetFields()
 }
+
+const options = Array.from({ length: 10000 }).map((_, idx) => ({
+  value: `${idx + 1}`,
+  label: `${idx + 1}`,
+}))
 </script>

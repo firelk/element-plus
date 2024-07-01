@@ -1,8 +1,9 @@
 <template>
   <el-form
     ref="formRef"
+    style="max-width: 600px"
     :model="dynamicValidateForm"
-    label-width="120px"
+    label-width="auto"
     class="demo-dynamic"
   >
     <el-form-item
@@ -21,7 +22,7 @@
         },
       ]"
     >
-      <el-input v-model="dynamicValidateForm.email"></el-input>
+      <el-input v-model="dynamicValidateForm.email" />
     </el-form-item>
     <el-form-item
       v-for="(domain, index) in dynamicValidateForm.domains"
@@ -34,10 +35,10 @@
         trigger: 'blur',
       }"
     >
-      <el-input v-model="domain.value"></el-input>
-      <el-button class="mt-2" @click.prevent="removeDomain(domain)"
-        >Delete</el-button
-      >
+      <el-input v-model="domain.value" />
+      <el-button class="mt-2" @click.prevent="removeDomain(domain)">
+        Delete
+      </el-button>
     </el-form-item>
     <el-form-item>
       <el-button type="primary" @click="submitForm(formRef)">Submit</el-button>
@@ -49,9 +50,8 @@
 
 <script lang="ts" setup>
 import { reactive, ref } from 'vue'
-import type { ElForm } from 'element-plus'
+import type { FormInstance } from 'element-plus'
 
-type FormInstance = InstanceType<typeof ElForm>
 const formRef = ref<FormInstance>()
 const dynamicValidateForm = reactive<{
   domains: DomainItem[]
@@ -92,7 +92,6 @@ const submitForm = (formEl: FormInstance | undefined) => {
       console.log('submit!')
     } else {
       console.log('error submit!')
-      return false
     }
   })
 }

@@ -1,43 +1,37 @@
 <template>
   <label
-    class="el-radio"
-    :class="{
-      [`el-radio--${size || ''}`]: size,
-      'is-disabled': disabled,
-      'is-focus': focus,
-      'is-bordered': border,
-      'is-checked': modelValue === label,
-    }"
-    role="radio"
-    :aria-checked="modelValue === label"
-    :aria-disabled="disabled"
-    :tabindex="tabIndex"
-    @keydown.space.stop.prevent="modelValue = disabled ? modelValue : label"
+    :class="[
+      ns.b(),
+      ns.is('disabled', disabled),
+      ns.is('focus', focus),
+      ns.is('bordered', border),
+      ns.is('checked', modelValue === actualValue),
+      ns.m(size),
+    ]"
   >
     <span
-      class="el-radio__input"
-      :class="{
-        'is-disabled': disabled,
-        'is-checked': modelValue === label,
-      }"
+      :class="[
+        ns.e('input'),
+        ns.is('disabled', disabled),
+        ns.is('checked', modelValue === actualValue),
+      ]"
     >
-      <span class="el-radio__inner"></span>
       <input
         ref="radioRef"
         v-model="modelValue"
-        class="el-radio__original"
-        :value="label"
-        type="radio"
-        aria-hidden="true"
-        :name="name"
+        :class="ns.e('original')"
+        :value="actualValue"
+        :name="name || radioGroup?.name"
         :disabled="disabled"
-        tabindex="-1"
+        type="radio"
         @focus="focus = true"
         @blur="focus = false"
         @change="handleChange"
+        @click.stop
       />
+      <span :class="ns.e('inner')" />
     </span>
-    <span class="el-radio__label" @keydown.stop>
+    <span :class="ns.e('label')" @keydown.stop>
       <slot>
         {{ label }}
       </slot>
@@ -45,34 +39,24 @@
   </label>
 </template>
 
-<script lang="ts">
-import { defineComponent, nextTick } from 'vue'
-import { useRadio, radioEmits, radioProps } from './radio'
+<script lang="ts" setup>
+import { nextTick } from 'vue'
+import { useNamespace } from '@element-plus/hooks'
+import { radioEmits, radioProps } from './radio'
+import { useRadio } from './use-radio'
 
-export default defineComponent({
+defineOptions({
   name: 'ElRadio',
-  props: radioProps,
-  emits: radioEmits,
-
-  setup(props, { emit }) {
-    const { radioRef, isGroup, focus, size, disabled, tabIndex, modelValue } =
-      useRadio(props, emit)
-
-    function handleChange() {
-      nextTick(() => emit('change', modelValue.value))
-    }
-
-    return {
-      focus,
-      isGroup,
-      modelValue,
-      tabIndex,
-      size,
-      disabled,
-      radioRef,
-
-      handleChange,
-    }
-  },
 })
+
+const props = defineProps(radioProps)
+const emit = defineEmits(radioEmits)
+
+const ns = useNamespace('radio')
+const { radioRef, radioGroup, focus, size, disabled, modelValue, actualValue } =
+  useRadio(props, emit)
+
+function handleChange() {
+  nextTick(() => emit('change', modelValue.value))
+}
 </script>

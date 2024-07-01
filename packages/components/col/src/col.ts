@@ -1,119 +1,86 @@
-import { defineComponent, computed, inject, h, renderSlot } from 'vue'
-import { buildProps, definePropType, mutable } from '@element-plus/utils-v2'
-import { useNamespace } from '@element-plus/hooks'
-import type { ExtractPropTypes, CSSProperties } from 'vue'
+import { buildProps, definePropType, mutable } from '@element-plus/utils'
+import type { ExtractPropTypes } from 'vue'
+import type Col from './col.vue'
 
-type SizeObject = {
+export type ColSizeObject = {
   span?: number
   offset?: number
+  pull?: number
+  push?: number
 }
-type Size = number | SizeObject
+export type ColSize = number | ColSizeObject
 
 export const colProps = buildProps({
+  /**
+   * @description custom element tag
+   */
   tag: {
     type: String,
     default: 'div',
   },
+  /**
+   * @description number of column the grid spans
+   */
   span: {
     type: Number,
     default: 24,
   },
+  /**
+   * @description number of spacing on the left side of the grid
+   */
   offset: {
     type: Number,
     default: 0,
   },
+  /**
+   * @description number of columns that grid moves to the left
+   */
   pull: {
     type: Number,
     default: 0,
   },
+  /**
+   * @description number of columns that grid moves to the right
+   */
   push: {
     type: Number,
     default: 0,
   },
+  /**
+   * @description `<768px` Responsive columns or column props object
+   */
   xs: {
-    type: definePropType<Size>([Number, Object]),
+    type: definePropType<ColSize>([Number, Object]),
     default: () => mutable({} as const),
   },
+  /**
+   * @description `≥768px` Responsive columns or column props object
+   */
   sm: {
-    type: definePropType<Size>([Number, Object]),
+    type: definePropType<ColSize>([Number, Object]),
     default: () => mutable({} as const),
   },
+  /**
+   * @description `≥992px` Responsive columns or column props object
+   */
   md: {
-    type: definePropType<Size>([Number, Object]),
+    type: definePropType<ColSize>([Number, Object]),
     default: () => mutable({} as const),
   },
+  /**
+   * @description `≥1200px` Responsive columns or column props object
+   */
   lg: {
-    type: definePropType<Size>([Number, Object]),
+    type: definePropType<ColSize>([Number, Object]),
     default: () => mutable({} as const),
   },
+  /**
+   * @description `≥1920px` Responsive columns or column props object
+   */
   xl: {
-    type: definePropType<Size>([Number, Object]),
+    type: definePropType<ColSize>([Number, Object]),
     default: () => mutable({} as const),
   },
 } as const)
 export type ColProps = ExtractPropTypes<typeof colProps>
-
-export default defineComponent({
-  name: 'ElCol',
-  props: colProps,
-
-  setup(props, { slots }) {
-    const { gutter } = inject('ElRow', { gutter: { value: 0 } })
-    const ns = useNamespace('col')
-
-    const style = computed<CSSProperties>(() => {
-      if (gutter.value) {
-        return {
-          paddingLeft: `${gutter.value / 2}px`,
-          paddingRight: `${gutter.value / 2}px`,
-        }
-      }
-      return {}
-    })
-
-    const classList = computed(() => {
-      const classes: string[] = []
-
-      const pos = ['span', 'offset', 'pull', 'push'] as const
-      pos.forEach((prop) => {
-        const size = props[prop]
-        if (typeof size === 'number') {
-          if (prop === 'span') classes.push(ns.b(`${props[prop]}`))
-          else if (size > 0) classes.push(ns.b(`${prop}-${props[prop]}`))
-        }
-      })
-
-      const sizes = ['xs', 'sm', 'md', 'lg', 'xl'] as const
-      sizes.forEach((size) => {
-        if (typeof props[size] === 'number') {
-          classes.push(ns.b(`${size}-${props[size]}`))
-        } else if (typeof props[size] === 'object') {
-          const sizeProps = props[size]
-          Object.keys(sizeProps).forEach((prop) => {
-            classes.push(
-              prop !== 'span'
-                ? ns.b(`${size}-${prop}-${sizeProps[prop]}`)
-                : ns.b(`${size}-${sizeProps[prop]}`)
-            )
-          })
-        }
-      })
-      // this is for the fix
-      if (gutter.value) {
-        classes.push('is-guttered')
-      }
-
-      return classes
-    })
-
-    return () =>
-      h(
-        props.tag,
-        {
-          class: [ns.b(), classList.value],
-          style: style.value,
-        },
-        [renderSlot(slots, 'default')]
-      )
-  },
-})
+export type ColInstance = InstanceType<typeof Col>

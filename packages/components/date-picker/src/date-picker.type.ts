@@ -1,8 +1,8 @@
-import type { InjectionKey, SetupContext } from 'vue'
 import type { Dayjs } from 'dayjs'
 
 export declare type IDatePickerType =
   | 'year'
+  | 'years'
   | 'month'
   | 'date'
   | 'dates'
@@ -30,10 +30,3 @@ export interface DateCell {
   dayjs?: Dayjs
   type?: DateCellType
 }
-
-interface DatePickerContext {
-  ctx: SetupContext
-}
-
-export const ROOT_PICKER_INJECTION_KEY: InjectionKey<DatePickerContext> =
-  Symbol()

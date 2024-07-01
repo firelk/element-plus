@@ -1,9 +1,8 @@
-import { inject, computed, getCurrentInstance, watch, toRaw, unref } from 'vue'
-import { getValueByPath, escapeRegexpString } from '@element-plus/utils/util'
-import { selectKey, selectGroupKey } from './token'
-
-import type { Ref } from 'vue'
-import type { QueryChangeCtx } from './token'
+// @ts-nocheck
+import { computed, getCurrentInstance, inject, toRaw, watch } from 'vue'
+import { get, isEqual } from 'lodash-unified'
+import { escapeStringRegexp, isObject } from '@element-plus/utils'
+import { selectGroupKey, selectKey } from './token'
 
 export function useOption(props, states) {
   // inject
@@ -11,18 +10,11 @@ export function useOption(props, states) {
   const selectGroup = inject(selectGroupKey, { disabled: false })
 
   // computed
-  const isObject = computed(() => {
-    return (
-      Object.prototype.toString.call(props.value).toLowerCase() ===
-      '[object object]'
-    )
-  })
-
   const itemSelected = computed(() => {
-    if (!select.props.multiple) {
-      return isEqual(props.value, select.props.modelValue)
-    } else {
+    if (select.props.multiple) {
       return contains(select.props.modelValue as unknown[], props.value)
+    } else {
+      return contains([select.props.modelValue] as unknown[], props.value)
     }
   })
 
@@ -40,7 +32,7 @@ export function useOption(props, states) {
   })
 
   const currentLabel = computed(() => {
-    return props.label || (isObject.value ? '' : props.value)
+    return props.label || (isObject(props.value) ? '' : props.value)
   })
 
   const currentValue = computed(() => {
@@ -54,34 +46,28 @@ export function useOption(props, states) {
   const instance = getCurrentInstance()
 
   const contains = (arr = [], target) => {
-    if (!isObject.value) {
-      return arr && arr.indexOf(target) > -1
+    if (!isObject(props.value)) {
+      return arr && arr.includes(target)
     } else {
       const valueKey = select.props.valueKey
       return (
         arr &&
         arr.some((item) => {
-          return (
-            getValueByPath(item, valueKey) === getValueByPath(target, valueKey)
-          )
+          return toRaw(get(item, valueKey)) === get(target, valueKey)
         })
       )
     }
   }
 
-  const isEqual = (a: unknown, b: unknown) => {
-    if (!isObject.value) {
-      return a === b
-    } else {
-      const { valueKey } = select.props
-      return getValueByPath(a, valueKey) === getValueByPath(b, valueKey)
+  const hoverItem = () => {
+    if (!props.disabled && !selectGroup.disabled) {
+      select.states.hoveringIndex = select.optionsArray.indexOf(instance.proxy)
     }
   }
 
-  const hoverItem = () => {
-    if (!props.disabled && !selectGroup.disabled) {
-      select.hoverIndex = select.optionsArray.indexOf(instance.proxy)
-    }
+  const updateOption = (query: string) => {
+    const regexp = new RegExp(escapeStringRegexp(query), 'i')
+    states.visible = regexp.test(currentLabel.value) || props.created
   }
 
   watch(
@@ -95,11 +81,17 @@ export function useOption(props, states) {
     () => props.value,
     (val, oldVal) => {
       const { remote, valueKey } = select.props
+
+      if (!isEqual(val, oldVal)) {
+        select.onOptionDestroy(oldVal, instance.proxy)
+        select.onOptionCreate(instance.proxy)
+      }
+
       if (!props.created && !remote) {
         if (
           valueKey &&
-          typeof val === 'object' &&
-          typeof oldVal === 'object' &&
+          isObject(val) &&
+          isObject(oldVal) &&
           val[valueKey] === oldVal[valueKey]
         ) {
           return
@@ -117,17 +109,6 @@ export function useOption(props, states) {
     { immediate: true }
   )
 
-  const { queryChange } = toRaw(select)
-  watch(queryChange, (changes: Ref<QueryChangeCtx>) => {
-    const { query } = unref(changes)
-
-    const regexp = new RegExp(escapeRegexpString(query), 'i')
-    states.visible = regexp.test(currentLabel.value) || props.created
-    if (!states.visible) {
-      select.filteredOptionsCount--
-    }
-  })
-
   return {
     select,
     currentLabel,
@@ -135,5 +116,6 @@ export function useOption(props, states) {
     itemSelected,
     isDisabled,
     hoverItem,
+    updateOption,
   }
 }

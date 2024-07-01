@@ -24,11 +24,11 @@
     ]"
     :style="style"
     :data-prefix="ns.namespace.value"
-    @mouseleave="handleMouseLeave()"
+    @mouseleave="handleMouseLeave"
   >
-    <div :class="ns.e('inner-wrapper')">
+    <div :class="ns.e('inner-wrapper')" :style="tableInnerStyle">
       <div ref="hiddenColumns" class="hidden-columns">
-        <slot></slot>
+        <slot />
       </div>
       <div
         v-if="showHeader && tableLayout === 'fixed'"
@@ -47,8 +47,9 @@
           <hColgroup
             :columns="store.states.columns.value"
             :table-layout="tableLayout"
-          ></hColgroup>
+          />
           <table-header
+            ref="tableHeaderRef"
             :border="border"
             :default-sort="defaultSort"
             :store="store"
@@ -56,11 +57,12 @@
           />
         </table>
       </div>
-      <div ref="bodyWrapper" :style="bodyHeight" :class="ns.e('body-wrapper')">
+      <div ref="bodyWrapper" :class="ns.e('body-wrapper')">
         <el-scrollbar
-          ref="scrollWrapper"
-          :height="maxHeight ? undefined : height"
-          :max-height="maxHeight ? height : undefined"
+          ref="scrollBarRef"
+          :view-style="scrollbarViewStyle"
+          :wrap-style="scrollbarStyle"
+          :always="scrollbarAlwaysOn"
         >
           <table
             ref="tableBody"
@@ -76,9 +78,11 @@
             <hColgroup
               :columns="store.states.columns.value"
               :table-layout="tableLayout"
-            ></hColgroup>
+            />
             <table-header
               v-if="showHeader && tableLayout === 'auto'"
+              ref="tableHeaderRef"
+              :class="ns.e('body-header')"
               :border="border"
               :default-sort="defaultSort"
               :store="store"
@@ -89,9 +93,19 @@
               :highlight="highlightCurrentRow"
               :row-class-name="rowClassName"
               :tooltip-effect="tooltipEffect"
+              :tooltip-options="tooltipOptions"
               :row-style="rowStyle"
               :store="store"
               :stripe="stripe"
+            />
+            <table-footer
+              v-if="showSummary && tableLayout === 'auto'"
+              :class="ns.e('body-footer')"
+              :border="border"
+              :default-sort="defaultSort"
+              :store="store"
+              :sum-text="computedSumText"
+              :summary-method="summaryMethod"
             />
           </table>
           <div
@@ -109,38 +123,50 @@
             ref="appendWrapper"
             :class="ns.e('append-wrapper')"
           >
-            <slot name="append"></slot>
+            <slot name="append" />
           </div>
         </el-scrollbar>
       </div>
-      <div v-if="border || isGroup" :class="ns.e('border-left-patch')"></div>
-    </div>
-    <div
-      v-if="showSummary"
-      v-show="!isEmpty"
-      ref="footerWrapper"
-      v-mousewheel="handleHeaderFooterMousewheel"
-      :class="ns.e('footer-wrapper')"
-    >
-      <table-footer
-        :border="border"
-        :default-sort="defaultSort"
-        :store="store"
-        :style="tableBodyStyles"
-        :sum-text="computedSumText"
-        :summary-method="summaryMethod"
-      />
+      <div
+        v-if="showSummary && tableLayout === 'fixed'"
+        v-show="!isEmpty"
+        ref="footerWrapper"
+        v-mousewheel="handleHeaderFooterMousewheel"
+        :class="ns.e('footer-wrapper')"
+      >
+        <table
+          :class="ns.e('footer')"
+          cellspacing="0"
+          cellpadding="0"
+          border="0"
+          :style="tableBodyStyles"
+        >
+          <hColgroup
+            :columns="store.states.columns.value"
+            :table-layout="tableLayout"
+          />
+          <table-footer
+            :border="border"
+            :default-sort="defaultSort"
+            :store="store"
+            :sum-text="computedSumText"
+            :summary-method="summaryMethod"
+          />
+        </table>
+      </div>
+      <div v-if="border || isGroup" :class="ns.e('border-left-patch')" />
     </div>
     <div
       v-show="resizeProxyVisible"
       ref="resizeProxy"
       :class="ns.e('column-resize-proxy')"
-    ></div>
+    />
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent, getCurrentInstance, computed, provide } from 'vue'
+// @ts-nocheck
+import { computed, defineComponent, getCurrentInstance, provide } from 'vue'
 import { debounce } from 'lodash-unified'
 import { Mousewheel } from '@element-plus/directives'
 import { useLocale, useNamespace } from '@element-plus/hooks'
@@ -151,10 +177,13 @@ import TableHeader from './table-header'
 import TableBody from './table-body'
 import TableFooter from './table-footer'
 import useUtils from './table/utils-helper'
+import { convertToRows } from './table-header/utils-helper'
 import useStyle from './table/style-helper'
+import useKeyRender from './table/key-render-helper'
 import defaultProps from './table/defaults'
 import { TABLE_INJECTION_KEY } from './tokens'
 import { hColgroup } from './h-helper'
+import { useScrollbar } from './composables/use-scrollbar'
 
 import type { Table } from './table/defaults'
 
@@ -215,6 +244,7 @@ export default defineComponent({
      */
     const {
       setCurrentRow,
+      getSelectionRows,
       toggleRowSelection,
       clearSelection,
       clearFilter,
@@ -231,23 +261,25 @@ export default defineComponent({
       handleMouseLeave,
       handleHeaderFooterMousewheel,
       tableSize,
-      bodyHeight,
-      height,
       emptyBlockStyle,
       handleFixedMousewheel,
-      fixedHeight,
-      fixedBodyHeight,
       resizeProxyVisible,
       bodyWidth,
       resizeState,
       doLayout,
       tableBodyStyles,
       tableLayout,
+      scrollbarViewStyle,
+      tableInnerStyle,
+      scrollbarStyle,
     } = useStyle<Row>(props, layout, store, table)
+
+    const { scrollBarRef, scrollTo, setScrollLeft, setScrollTop } =
+      useScrollbar()
 
     const debouncedUpdateLayout = debounce(doLayout, 50)
 
-    const tableId = `el-table_${tableIdSeed++}`
+    const tableId = `${ns.namespace.value}-table_${tableIdSeed++}`
     table.tableId = tableId
     table.state = {
       isGroup,
@@ -263,10 +295,17 @@ export default defineComponent({
       return props.emptyText || t('el.table.emptyText')
     })
 
+    const columns = computed(() => {
+      return convertToRows(store.states.originColumns.value)[0]
+    })
+
+    useKeyRender(table)
+
     return {
       ns,
       layout,
       store,
+      columns,
       handleHeaderFooterMousewheel,
       handleMouseLeave,
       tableId,
@@ -278,22 +317,49 @@ export default defineComponent({
       resizeState,
       isGroup,
       bodyWidth,
-      bodyHeight,
-      height,
       tableBodyStyles,
       emptyBlockStyle,
       debouncedUpdateLayout,
       handleFixedMousewheel,
-      fixedHeight,
-      fixedBodyHeight,
+      /**
+       * @description used in single selection Table, set a certain row selected. If called without any parameter, it will clear selection
+       */
       setCurrentRow,
+      /**
+       * @description returns the currently selected rows
+       */
+      getSelectionRows,
+      /**
+       * @description used in multiple selection Table, toggle if a certain row is selected. With the second parameter, you can directly set if this row is selected
+       */
       toggleRowSelection,
+      /**
+       * @description used in multiple selection Table, clear user selection
+       */
       clearSelection,
+      /**
+       * @description clear filters of the columns whose `columnKey` are passed in. If no params, clear all filters
+       */
       clearFilter,
+      /**
+       * @description used in multiple selection Table, toggle select all and deselect all
+       */
       toggleAllSelection,
+      /**
+       * @description used in expandable Table or tree Table, toggle if a certain row is expanded. With the second parameter, you can directly set if this row is expanded or collapsed
+       */
       toggleRowExpansion,
+      /**
+       * @description clear sorting, restore data to the original order
+       */
       clearSort,
+      /**
+       * @description refresh the layout of Table. When the visibility of Table changes, you may need to call this method to get a correct layout
+       */
       doLayout,
+      /**
+       * @description sort Table manually. Property `prop` is used to set sort column, property `order` is used to set sort order
+       */
       sort,
       t,
       setDragVisible,
@@ -301,6 +367,22 @@ export default defineComponent({
       computedSumText,
       computedEmptyText,
       tableLayout,
+      scrollbarViewStyle,
+      tableInnerStyle,
+      scrollbarStyle,
+      scrollBarRef,
+      /**
+       * @description scrolls to a particular set of coordinates
+       */
+      scrollTo,
+      /**
+       * @description set horizontal scroll position
+       */
+      setScrollLeft,
+      /**
+       * @description set vertical scroll position
+       */
+      setScrollTop,
     }
   },
 })

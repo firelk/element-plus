@@ -1,9 +1,15 @@
 export default {
   name: 'fr',
   el: {
+    breadcrumb: {
+      label: `Fil d'Ariane`,
+    },
     colorpicker: {
       confirm: 'OK',
       clear: 'Effacer',
+      defaultLabel: 'color picker',
+      description:
+        'La couleur actuelle est {color}. Appuyer sur Entrée pour sélectionner une nouvelle couleur.',
     },
     datepicker: {
       now: 'Maintenant',
@@ -11,6 +17,13 @@ export default {
       cancel: 'Annuler',
       clear: 'Effacer',
       confirm: 'OK',
+      dateTablePrompt:
+        'Utiliser les touches fléchées et appuyer sur Entrée pour sélectionner le jour du mois',
+      monthTablePrompt:
+        'Utiliser les touches fléchées et appuyer sur Entrée pour sélectionner le mois',
+      yearTablePrompt:
+        "Utiliser les touches fléchées et appuyer sur Entrée pour sélectionner l'année",
+      selectedDate: 'Date sélectionnée',
       selectDate: 'Choisir date',
       selectTime: 'Choisir horaire',
       startDate: 'Date début',
@@ -34,7 +47,7 @@ export default {
       month10: 'Octobre',
       month11: 'Novembre',
       month12: 'Décembre',
-      // week: 'Semaine',
+      week: 'Semaine',
       weeks: {
         sun: 'Dim',
         mon: 'Lun',
@@ -43,6 +56,15 @@ export default {
         thu: 'Jeu',
         fri: 'Ven',
         sat: 'Sam',
+      },
+      weeksFull: {
+        sun: 'Dimanche',
+        mon: 'Lundi',
+        tue: 'Mardi',
+        wed: 'Mercredi',
+        thu: 'Jeudi',
+        fri: 'Vendredi',
+        sat: 'Samedi',
       },
       months: {
         jan: 'Jan',
@@ -58,6 +80,10 @@ export default {
         nov: 'Nov',
         dec: 'Déc',
       },
+    },
+    inputNumber: {
+      decrease: 'décrémenter',
+      increase: 'incrémenter',
     },
     select: {
       loading: 'Chargement',
@@ -76,17 +102,38 @@ export default {
       pagesize: '/page',
       total: 'Total {total}',
       pageClassifier: '',
+      page: 'Page',
+      prev: 'Aller à la page précédente',
+      next: 'Aller à la page suivante',
+      currentPage: 'page {pager}',
+      prevPages: '{pager} pages précédentes',
+      nextPages: '{pager} pages suivantes',
+      deprecationWarning:
+        'Utilisations obsolètes détectées, veuillez vous référer à la documentation el-pagination pour plus de détails',
+    },
+    dialog: {
+      close: 'Fermer la boîte de dialogue',
+    },
+    drawer: {
+      close: 'Fermer la boîte de dialogue',
     },
     messagebox: {
+      title: 'Message',
       confirm: 'Confirmer',
       cancel: 'Annuler',
       error: 'Erreur',
+      close: 'Fermer la boîte de dialogue',
     },
     upload: {
       deleteTip: 'Cliquer sur supprimer pour retirer le fichier',
       delete: 'Supprimer',
       preview: 'Aperçu',
       continue: 'Continuer',
+    },
+    slider: {
+      defaultLabel: 'curseur entre {min} et {max}',
+      defaultRangeStartLabel: 'choisir la valeur de départ',
+      defaultRangeEndLabel: 'sélectionner la valeur finale',
     },
     table: {
       emptyText: 'Aucune donnée',
@@ -115,6 +162,11 @@ export default {
     popconfirm: {
       confirmButtonText: 'Oui',
       cancelButtonText: 'Non',
+    },
+    carousel: {
+      leftArrow: 'Flèche du carrousel vers la gauche',
+      rightArrow: 'Flèche du carrousel vers la droite',
+      indicator: 'Passer au carrousel index {index}',
     },
   },
 }

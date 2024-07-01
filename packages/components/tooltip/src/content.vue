@@ -1,16 +1,19 @@
 <template>
   <teleport :disabled="!teleported" :to="appendTo">
     <transition
-      :name="transition"
+      :name="transitionClass"
       @after-leave="onTransitionLeave"
       @before-enter="onBeforeEnter"
       @after-enter="onAfterShow"
+      @before-leave="onBeforeLeave"
     >
       <el-popper-content
         v-if="shouldRender"
         v-show="shouldShow"
+        :id="id"
         ref="contentRef"
         v-bind="$attrs"
+        :aria-label="ariaLabel"
         :aria-hidden="ariaHidden"
         :boundaries-padding="boundariesPadding"
         :fallback-placements="fallbackPlacements"
@@ -25,140 +28,163 @@
         :popper-class="popperClass"
         :popper-style="[popperStyle, contentStyle]"
         :reference-el="referenceEl"
+        :trigger-target-el="triggerTargetEl"
+        :visible="shouldShow"
         :z-index="zIndex"
         @mouseenter="onContentEnter"
         @mouseleave="onContentLeave"
+        @blur="onBlur"
+        @close="onClose"
       >
-        <slot />
-        <el-visually-hidden :id="id" role="tooltip">
-          {{ ariaLabel }}
-        </el-visually-hidden>
+        <template v-if="!destroyed">
+          <slot />
+        </template>
       </el-popper-content>
     </transition>
   </teleport>
 </template>
 
-<script lang="ts">
-import { computed, defineComponent, inject, ref, unref, watch } from 'vue'
+<script lang="ts" setup>
+import { computed, inject, onBeforeUnmount, ref, unref, watch } from 'vue'
 import { onClickOutside } from '@vueuse/core'
+import { useNamespace, usePopperContainerId } from '@element-plus/hooks'
+import { composeEventHandlers } from '@element-plus/utils'
 import { ElPopperContent } from '@element-plus/components/popper'
-import { ElVisuallyHidden } from '@element-plus/components/visual-hidden'
-import { composeEventHandlers } from '@element-plus/utils/dom'
-import { useEscapeKeydown } from '@element-plus/hooks'
+import { TOOLTIP_INJECTION_KEY } from './constants'
+import { useTooltipContentProps } from './content'
 
-import { useTooltipContentProps } from './tooltip'
-import { TOOLTIP_INJECTION_KEY } from './tokens'
-
-export default defineComponent({
+defineOptions({
   name: 'ElTooltipContent',
-  components: {
-    ElPopperContent,
-    ElVisuallyHidden,
-  },
   inheritAttrs: false,
-  props: useTooltipContentProps,
-  setup(props) {
-    const contentRef = ref<InstanceType<typeof ElPopperContent> | null>(null)
-    const intermediateOpen = ref(false)
-    const entering = ref(false)
-    const leaving = ref(false)
-    const { controlled, id, open, trigger, onClose, onOpen, onShow, onHide } =
-      inject(TOOLTIP_INJECTION_KEY, undefined)!
-    const persistentRef = computed(() => {
-      // For testing, we would always want the content to be rendered
-      // to the DOM, so we need to return true here.
-      if (process.env.NODE_ENV === 'test') {
-        return true
-      }
-      return props.persistent
-    })
+})
 
-    const shouldRender = computed(() => {
-      return unref(persistentRef) ? true : unref(open)
-    })
+const props = defineProps(useTooltipContentProps)
 
-    const shouldShow = computed(() => {
-      return props.disabled ? false : unref(open)
-    })
+const { selector } = usePopperContainerId()
+const ns = useNamespace('tooltip')
+// TODO any is temporary, replace with `InstanceType<typeof ElPopperContent> | null` later
+const contentRef = ref<any>(null)
+const destroyed = ref(false)
+const {
+  controlled,
+  id,
+  open,
+  trigger,
+  onClose,
+  onOpen,
+  onShow,
+  onHide,
+  onBeforeShow,
+  onBeforeHide,
+} = inject(TOOLTIP_INJECTION_KEY, undefined)!
+const transitionClass = computed(() => {
+  return props.transition || `${ns.namespace.value}-fade-in-linear`
+})
+const persistentRef = computed(() => {
+  // For testing, we would always want the content to be rendered
+  // to the DOM, so we need to return true here.
+  if (process.env.NODE_ENV === 'test') {
+    return true
+  }
+  return props.persistent
+})
 
-    const contentStyle = computed(() => (props.style ?? {}) as any)
+onBeforeUnmount(() => {
+  destroyed.value = true
+})
 
-    const ariaHidden = computed(() => !unref(open))
+const shouldRender = computed(() => {
+  return unref(persistentRef) ? true : unref(open)
+})
 
-    useEscapeKeydown(onClose)
+const shouldShow = computed(() => {
+  return props.disabled ? false : unref(open)
+})
 
-    const onTransitionLeave = () => {
-      onHide()
-    }
+const appendTo = computed(() => {
+  return props.appendTo || selector.value
+})
 
-    const stopWhenControlled = () => {
-      if (unref(controlled)) return true
-    }
+const contentStyle = computed(() => (props.style ?? {}) as any)
 
-    const onContentEnter = composeEventHandlers(stopWhenControlled, () => {
-      if (props.enterable && unref(trigger) === 'hover') {
-        onOpen()
-      }
-    })
+const ariaHidden = computed(() => !unref(open))
 
-    const onContentLeave = composeEventHandlers(stopWhenControlled, () => {
-      if (unref(trigger) === 'hover') {
+const onTransitionLeave = () => {
+  onHide()
+}
+
+const stopWhenControlled = () => {
+  if (unref(controlled)) return true
+}
+
+const onContentEnter = composeEventHandlers(stopWhenControlled, () => {
+  if (props.enterable && unref(trigger) === 'hover') {
+    onOpen()
+  }
+})
+
+const onContentLeave = composeEventHandlers(stopWhenControlled, () => {
+  if (unref(trigger) === 'hover') {
+    onClose()
+  }
+})
+
+const onBeforeEnter = () => {
+  contentRef.value?.updatePopper?.()
+  onBeforeShow?.()
+}
+
+const onBeforeLeave = () => {
+  onBeforeHide?.()
+}
+
+const onAfterShow = () => {
+  onShow()
+  stopHandle = onClickOutside(
+    computed(() => {
+      return contentRef.value?.popperContentRef
+    }),
+    () => {
+      if (unref(controlled)) return
+      const $trigger = unref(trigger)
+      if ($trigger !== 'hover') {
         onClose()
       }
-    })
-
-    const onBeforeEnter = () => {
-      contentRef.value?.updatePopper?.()
     }
+  )
+}
 
-    const onAfterShow = () => {
-      onShow()
-    }
+const onBlur = () => {
+  if (!props.virtualTriggering) {
+    onClose()
+  }
+}
 
-    let stopHandle: ReturnType<typeof onClickOutside>
+let stopHandle: ReturnType<typeof onClickOutside>
 
-    watch(
-      () => unref(open),
-      (val) => {
-        if (val) {
-          stopHandle = onClickOutside(
-            computed(() => {
-              return contentRef.value?.popperContentRef
-            }),
-            () => {
-              if (unref(controlled)) return
-              const $trigger = unref(trigger)
-              if ($trigger !== 'hover') {
-                onClose()
-              }
-            }
-          )
-        } else {
-          stopHandle?.()
-        }
-      },
-      {
-        flush: 'post',
-      }
-    )
-
-    return {
-      ariaHidden,
-      entering,
-      leaving,
-      id,
-      intermediateOpen,
-      contentStyle,
-      contentRef,
-      shouldRender,
-      shouldShow,
-      open,
-      onAfterShow,
-      onBeforeEnter,
-      onContentEnter,
-      onContentLeave,
-      onTransitionLeave,
+watch(
+  () => unref(open),
+  (val) => {
+    if (!val) {
+      stopHandle?.()
     }
   },
+  {
+    flush: 'post',
+  }
+)
+
+watch(
+  () => props.content,
+  () => {
+    contentRef.value?.updatePopper?.()
+  }
+)
+
+defineExpose({
+  /**
+   * @description el-popper-content component instance
+   */
+  contentRef,
 })
 </script>

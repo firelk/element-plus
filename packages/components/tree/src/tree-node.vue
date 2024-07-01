@@ -2,15 +2,15 @@
   <div
     v-show="node.visible"
     ref="node$"
-    class="el-tree-node"
-    :class="{
-      'is-expanded': expanded,
-      'is-current': node.isCurrent,
-      'is-hidden': !node.visible,
-      'is-focusable': !node.disabled,
-      'is-checked': !node.disabled && node.checked,
-      ...getNodeClass(node),
-    }"
+    :class="[
+      ns.b('node'),
+      ns.is('expanded', expanded),
+      ns.is('current', node.isCurrent),
+      ns.is('hidden', !node.visible),
+      ns.is('focusable', !node.disabled),
+      ns.is('checked', !node.disabled && node.checked),
+      getNodeClass(node),
+    ]"
     role="treeitem"
     tabindex="-1"
     :aria-expanded="expanded"
@@ -26,21 +26,21 @@
     @drop.stop="handleDrop"
   >
     <div
-      class="el-tree-node__content"
+      :class="ns.be('node', 'content')"
       :style="{ paddingLeft: (node.level - 1) * tree.props.indent + 'px' }"
     >
       <el-icon
         v-if="tree.props.icon || CaretRight"
         :class="[
+          ns.be('node', 'expand-icon'),
+          ns.is('leaf', node.isLeaf),
           {
-            'is-leaf': node.isLeaf,
             expanded: !node.isLeaf && expanded,
           },
-          'el-tree-node__expand-icon',
         ]"
         @click.stop="handleExpandIconClick"
       >
-        <component :is="tree.props.icon || CaretRight"></component>
+        <component :is="tree.props.icon || CaretRight" />
       </el-icon>
       <el-checkbox
         v-if="showCheckbox"
@@ -52,7 +52,7 @@
       />
       <el-icon
         v-if="node.loading"
-        class="el-tree-node__loading-icon is-loading"
+        :class="[ns.be('node', 'loading-icon'), ns.is('loading')]"
       >
         <loading />
       </el-icon>
@@ -62,7 +62,7 @@
       <div
         v-if="!renderAfterExpand || childNodeRendered"
         v-show="expanded"
-        class="el-tree-node__children"
+        :class="ns.be('node', 'children')"
         role="group"
         :aria-expanded="expanded"
       >
@@ -82,30 +82,32 @@
   </div>
 </template>
 <script lang="ts">
+// @ts-nocheck
 import {
   defineComponent,
   getCurrentInstance,
+  inject,
+  nextTick,
+  provide,
   ref,
   watch,
-  nextTick,
-  inject,
-  provide,
 } from 'vue'
-import { isString, isFunction } from '@vue/shared'
+import { isFunction, isString } from '@vue/shared'
 import ElCollapseTransition from '@element-plus/components/collapse-transition'
 import ElCheckbox from '@element-plus/components/checkbox'
 import { ElIcon } from '@element-plus/components/icon'
 import { CaretRight, Loading } from '@element-plus/icons-vue'
-import { debugWarn } from '@element-plus/utils-v2'
+import { debugWarn } from '@element-plus/utils'
+import { useNamespace } from '@element-plus/hooks'
 import NodeContent from './tree-node-content.vue'
-import { getNodeKey as getNodeKeyUtil } from './model/util'
+import { getNodeKey as getNodeKeyUtil, handleCurrentChange } from './model/util'
 import { useNodeExpandEventBroadcast } from './model/useNodeExpandEventBroadcast'
 import { dragEventsKey } from './model/useDragNode'
 import Node from './model/node'
 
 import type { ComponentInternalInstance, PropType } from 'vue'
-import type { Nullable } from '@element-plus/utils/types'
-import type { TreeOptionProps, TreeNodeData, RootTreeType } from './tree.type'
+import type { Nullable } from '@element-plus/utils'
+import type { RootTreeType, TreeNodeData, TreeOptionProps } from './tree.type'
 
 export default defineComponent({
   name: 'ElTreeNode',
@@ -135,6 +137,7 @@ export default defineComponent({
   },
   emits: ['node-expand'],
   setup(props, ctx) {
+    const ns = useNamespace('tree')
     const { broadcastExpanded } = useNodeExpandEventBroadcast(props)
     const tree = inject<RootTreeType>('RootTree')
     const expanded = ref(false)
@@ -155,7 +158,7 @@ export default defineComponent({
       childNodeRendered.value = true
     }
 
-    const childrenKey = tree.props['children'] || 'children'
+    const childrenKey = tree.props.props['children'] || 'children'
     watch(
       () => {
         const children = props.node.data[childrenKey]
@@ -178,6 +181,11 @@ export default defineComponent({
       (val) => {
         handleSelectChange(val, props.node.indeterminate)
       }
+    )
+
+    watch(
+      () => props.node.childNodes.length,
+      () => props.node.reInitChecked()
     )
 
     watch(
@@ -226,12 +234,8 @@ export default defineComponent({
     }
 
     const handleClick = (e: MouseEvent) => {
-      const store = tree.store.value
-      store.setCurrentNode(props.node)
-      tree.ctx.emit(
-        'current-change',
-        store.currentNode ? store.currentNode.data : null,
-        store.currentNode
+      handleCurrentChange(tree.store, tree.ctx.emit, () =>
+        tree.store.value.setCurrentNode(props.node)
       )
       tree.currentNode.value = props.node
 
@@ -318,6 +322,7 @@ export default defineComponent({
     }
 
     return {
+      ns,
       node$,
       tree,
       expanded,

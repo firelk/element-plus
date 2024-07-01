@@ -1,21 +1,23 @@
 <template>
   <el-input
     v-model="query"
+    style="width: 240px"
     placeholder="Please enter keyword"
     @input="onQueryChanged"
-  ></el-input>
+  />
   <el-tree-v2
     ref="treeRef"
+    style="max-width: 600px"
     :data="data"
     :props="props"
     :filter-method="filterMethod"
     :height="208"
-  ></el-tree-v2>
+  />
 </template>
 <script lang="ts" setup>
 import { ref } from 'vue'
+import { ElTreeV2 } from 'element-plus'
 import type { TreeNode } from 'element-plus/es/components/tree-v2/src/types'
-import type { ElTreeV2 } from 'element-plus'
 
 interface Tree {
   id: string
@@ -35,18 +37,20 @@ const createData = (
   key = 'node'
 ): Tree[] => {
   let id = 0
-  return new Array(minNodesNumber).fill(deep).map(() => {
-    const childrenNumber =
-      deep === maxDeep ? 0 : Math.round(Math.random() * maxChildren)
-    const nodeKey = getKey(key, ++id)
-    return {
-      id: nodeKey,
-      label: nodeKey,
-      children: childrenNumber
-        ? createData(maxDeep, maxChildren, childrenNumber, deep + 1, nodeKey)
-        : undefined,
-    }
-  })
+  return Array.from({ length: minNodesNumber })
+    .fill(deep)
+    .map(() => {
+      const childrenNumber =
+        deep === maxDeep ? 0 : Math.round(Math.random() * maxChildren)
+      const nodeKey = getKey(key, ++id)
+      return {
+        id: nodeKey,
+        label: nodeKey,
+        children: childrenNumber
+          ? createData(maxDeep, maxChildren, childrenNumber, deep + 1, nodeKey)
+          : undefined,
+      }
+    })
 }
 
 const query = ref('')
@@ -65,6 +69,6 @@ const onQueryChanged = (query: string) => {
   treeRef.value!.filter(query)
 }
 const filterMethod = (query: string, node: TreeNode) => {
-  return node.label!.indexOf(query) !== -1
+  return node.label!.includes(query)
 }
 </script>

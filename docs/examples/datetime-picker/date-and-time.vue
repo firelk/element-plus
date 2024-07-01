@@ -6,8 +6,7 @@
         v-model="value1"
         type="datetime"
         placeholder="Select date and time"
-      >
-      </el-date-picker>
+      />
     </div>
     <div class="block">
       <span class="demonstration">With shortcuts</span>
@@ -16,8 +15,7 @@
         type="datetime"
         placeholder="Select date and time"
         :shortcuts="shortcuts"
-      >
-      </el-date-picker>
+      />
     </div>
     <div class="block">
       <span class="demonstration">With default time</span>
@@ -26,8 +24,7 @@
         type="datetime"
         placeholder="Select date and time"
         :default-time="defaultTime"
-      >
-      </el-date-picker>
+      />
     </div>
   </div>
 </template>
@@ -49,7 +46,7 @@ const shortcuts = [
     text: 'Yesterday',
     value: () => {
       const date = new Date()
-      date.setTime(date.getTime() - 3600 * 1000 * 24)
+      date.setDate(date.getDate() - 1)
       return date
     },
   },
@@ -57,7 +54,7 @@ const shortcuts = [
     text: 'A week ago',
     value: () => {
       const date = new Date()
-      date.setTime(date.getTime() - 3600 * 1000 * 24 * 7)
+      date.setDate(date.getDate() - 7)
       return date
     },
   },
@@ -73,7 +70,7 @@ const shortcuts = [
 .demo-datetime-picker .block {
   padding: 30px 0;
   text-align: center;
-  border-right: solid 1px var(--el-border-color-base);
+  border-right: solid 1px var(--el-border-color);
   flex: 1;
 }
 .demo-datetime-picker .block:last-child {

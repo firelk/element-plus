@@ -7,14 +7,14 @@
     default-first-option
     :reserve-keyword="false"
     placeholder="Choose tags for your article"
+    style="width: 240px"
   >
     <el-option
       v-for="item in options"
       :key="item.value"
       :label="item.label"
       :value="item.value"
-    >
-    </el-option>
+    />
   </el-select>
 </template>
 

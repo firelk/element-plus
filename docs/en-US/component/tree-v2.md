@@ -61,15 +61,15 @@ tree-v2/custom-node
 
 Tree nodes can be filtered
 
-:::demo Invoke the `filter` method of the Tree instance to filter tree nodes. Its parameter is the filtering keyword. Note that for it to work, `filter-node-method` is required, and its value is the filtering method.
+:::demo Invoke the `filter` method of the Tree instance to filter tree nodes. Its parameter is the filtering keyword. Note that for it to work, `filter-method` is required, and its value is the filtering method.
 
 tree-v2/filter
 
 :::
 
-## Attributes
+## TreeV2 Attributes
 
-| Attribute             | Description                                                                                                                                  | Type                  | Default |
+| Name                  | Description                                                                                                                                  | Type                  | Default |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- | ------- |
 | data                  | tree data                                                                                                                                    | array                 | —       |
 | empty-text            | text displayed when data is void                                                                                                             | string                | —       |
@@ -81,10 +81,11 @@ tree-v2/filter
 | show-checkbox         | whether node is selectable                                                                                                                   | boolean               | false   |
 | check-strictly        | whether checked state of a node not affects its father and child nodes when `show-checkbox` is `true`                                        | boolean               | false   |
 | default-checked-keys  | array of keys of initially checked nodes                                                                                                     | array                 | —       |
-| current-node-key      | key of initially selected node                                                                                                               | string, number        | —       |
+| current-node-key      | key of initially selected node                                                                                                               | string / number       | —       |
 | filter-method         | this function will be executed on each node when use filter method. if return `false`, tree node will be hidden.                             | Function(value, data) | —       |
 | indent                | horizontal indentation of nodes in adjacent levels in pixels                                                                                 | number                | 16      |
-| icon                  | custome tree node icon                                                                                                                       | string                | -       |
+| icon                  | custom tree node icon                                                                                                                        | `string \| Component` | —       |
+| item-size ^(2.2.33)   | custom tree node height                                                                                                                      | number                | 26      |
 
 ## props
 
@@ -95,7 +96,7 @@ tree-v2/filter
 | children  | specify which node object is used as the node's subtree                              | string         | children |
 | disabled  | specify which key of node object represents if node's checkbox is disabled           | string         | disabled |
 
-## Method
+## TreeV2 Method
 
 `Tree` has the following method, which returns the currently selected array of nodes.
 | Method | Description | Parameters |
@@ -105,16 +106,20 @@ tree-v2/filter
 | getCheckedKeys | If the node can be selected (`show-checkbox` is `true`), it returns the currently selected array of node's keys | `(leafOnly: boolean)` |
 | setCheckedKeys | set certain nodes to be checked | `(keys: TreeKey[])` |
 | setChecked | set node to be checked or not | `(key: TreeKey, checked: boolean)` |
-| getHalfCheckedNodes | If the node can be selected (`show-checkbox` is `true`), it returns the currently half selected array of nodes | - |
-| getHalfCheckedKeys | If the node can be selected (`show-checkbox` is `true`), it returns the currently half selected array of node's keys | - |
-| getCurrentKey | return the highlight node's key (undefined if no node is highlighted) | - |
-| getCurrentNode | return the highlight node's data (undefined if no node is highlighted) | - |
+| setExpandedKeys | set certain nodes to be expanded | `(keys: TreeKey[])` |
+| getHalfCheckedNodes | If the node can be selected (`show-checkbox` is `true`), it returns the currently half selected array of nodes | — |
+| getHalfCheckedKeys | If the node can be selected (`show-checkbox` is `true`), it returns the currently half selected array of node's keys | — |
+| getCurrentKey | return the highlight node's key (undefined if no node is highlighted) | — |
+| getCurrentNode | return the highlight node's data (undefined if no node is highlighted) | — |
 | setCurrentKey | set highlighted node by key | `(key: TreeKey)` |
+| getNode | get node by key or data | `(data: TreeKey \| TreeNodeData)` |
+| expandNode | expand specified node | `(node: TreeNode)` |
+| collapseNode | collapse specified node | `(node: TreeNode)` |
 | setData | When the data is very large, using reactive data will cause the poor performance, so we provide a way to avoid this situation | `(data: TreeData)` |
 
-## Events
+## TreeV2 Events
 
-| Event Name       | Description                                          | Parameters                                                                                                                              |
+| Name             | Description                                          | Parameters                                                                                                                              |
 | ---------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | node-click       | triggers when a node is clicked                      | `(data: TreeNodeData, node: TreeNode, e: MouseEvent)`                                                                                   |
 | node-contextmenu | triggers when a node is clicked by right button      | `(e: Event, data: TreeNodeData, node: TreeNode)`                                                                                        |
@@ -124,7 +129,7 @@ tree-v2/filter
 | node-expand      | triggers when current node open                      | `(data: TreeNodeData, node: TreeNode)`                                                                                                  |
 | node-collapse    | triggers when current node close                     | `(data: TreeNodeData, node: TreeNode)`                                                                                                  |
 
-## Slots
+## TreeV2 Slots
 
 | Name | Description                                                                                    |
 | ---- | ---------------------------------------------------------------------------------------------- |

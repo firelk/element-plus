@@ -1,6 +1,6 @@
+// @ts-nocheck
 import { defineComponent, h } from 'vue'
 import { useNamespace } from '@element-plus/hooks'
-import { hColgroup } from '../h-helper'
 import useStyle from './style-helper'
 import type { Store } from '../store'
 
@@ -55,14 +55,8 @@ export default defineComponent({
     }
   },
   render() {
-    const {
-      columns,
-      getCellStyles,
-      getCellClasses,
-      summaryMethod,
-      sumText,
-      ns,
-    } = this
+    const { columns, getCellStyles, getCellClasses, summaryMethod, sumText } =
+      this
     const data = this.store.states.data.value
     let sums = []
     if (summaryMethod) {
@@ -80,7 +74,7 @@ export default defineComponent({
         const precisions = []
         let notNumber = true
         values.forEach((value) => {
-          if (!isNaN(value)) {
+          if (!Number.isNaN(+value)) {
             notNumber = false
             const decimal = `${value}`.split('.')[1]
             precisions.push(decimal ? decimal.length : 0)
@@ -90,8 +84,10 @@ export default defineComponent({
         if (!notNumber) {
           sums[index] = values.reduce((prev, curr) => {
             const value = Number(curr)
-            if (!isNaN(value)) {
-              return parseFloat((prev + curr).toFixed(Math.min(precision, 20)))
+            if (!Number.isNaN(+value)) {
+              return Number.parseFloat(
+                (prev + curr).toFixed(Math.min(precision, 20))
+              )
             } else {
               return prev
             }
@@ -102,41 +98,31 @@ export default defineComponent({
       })
     }
     return h(
-      'table',
-      {
-        class: ns.e('footer'),
-        cellspacing: '0',
-        cellpadding: '0',
-        border: '0',
-      },
-      [
-        hColgroup(columns),
-        h('tbody', [
-          h('tr', {}, [
-            ...columns.map((column, cellIndex) =>
-              h(
-                'td',
-                {
-                  key: cellIndex,
-                  colspan: column.colSpan,
-                  rowspan: column.rowSpan,
-                  class: getCellClasses(columns, cellIndex),
-                  style: getCellStyles(column, cellIndex),
-                },
-                [
-                  h(
-                    'div',
-                    {
-                      class: ['cell', column.labelClassName],
-                    },
-                    [sums[cellIndex]]
-                  ),
-                ]
-              )
-            ),
-          ]),
+      h('tfoot', [
+        h('tr', {}, [
+          ...columns.map((column, cellIndex) =>
+            h(
+              'td',
+              {
+                key: cellIndex,
+                colspan: column.colSpan,
+                rowspan: column.rowSpan,
+                class: getCellClasses(columns, cellIndex),
+                style: getCellStyles(column, cellIndex),
+              },
+              [
+                h(
+                  'div',
+                  {
+                    class: ['cell', column.labelClassName],
+                  },
+                  [sums[cellIndex]]
+                ),
+              ]
+            )
+          ),
         ]),
-      ]
+      ])
     )
   },
 })

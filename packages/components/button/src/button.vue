@@ -1,167 +1,74 @@
 <template>
-  <button
-    ref="buttonRef"
-    :class="[
-      ns.b(),
-      ns.m(buttonType),
-      ns.m(buttonSize),
-      ns.is('disabled', buttonDisabled),
-      ns.is('loading', loading),
-      ns.is('plain', plain),
-      ns.is('round', round),
-      ns.is('circle', circle),
-    ]"
-    :disabled="buttonDisabled || loading"
-    :autofocus="autofocus"
-    :type="nativeType"
+  <component
+    :is="tag"
+    ref="_ref"
+    v-bind="_props"
+    :class="buttonKls"
     :style="buttonStyle"
     @click="handleClick"
   >
     <template v-if="loading">
-      <slot v-if="$slots.loading" name="loading"></slot>
+      <slot v-if="$slots.loading" name="loading" />
       <el-icon v-else :class="ns.is('loading')">
         <component :is="loadingIcon" />
       </el-icon>
     </template>
-    <el-icon v-else-if="icon">
-      <component :is="icon" />
+    <el-icon v-else-if="icon || $slots.icon">
+      <component :is="icon" v-if="icon" />
+      <slot v-else name="icon" />
     </el-icon>
     <span
       v-if="$slots.default"
       :class="{ [ns.em('text', 'expand')]: shouldAddSpace }"
     >
-      <slot></slot>
+      <slot />
     </span>
-  </button>
+  </component>
 </template>
 
-<script lang="ts">
-import { computed, inject, defineComponent, Text, ref } from 'vue'
-import { useCssVar } from '@vueuse/core'
-import { TinyColor } from '@ctrl/tinycolor'
+<script lang="ts" setup>
+import { computed } from 'vue'
 import { ElIcon } from '@element-plus/components/icon'
-import {
-  useDisabled,
-  useFormItem,
-  useGlobalConfig,
-  useNamespace,
-  useSize,
-} from '@element-plus/hooks'
-import { buttonGroupContextKey } from '@element-plus/tokens'
-import { Loading } from '@element-plus/icons-vue'
-
+import { useNamespace } from '@element-plus/hooks'
+import { useButton } from './use-button'
 import { buttonEmits, buttonProps } from './button'
+import { useButtonCustomStyle } from './button-custom'
 
-export default defineComponent({
+defineOptions({
   name: 'ElButton',
+})
 
-  components: {
-    ElIcon,
-    Loading,
-  },
+const props = defineProps(buttonProps)
+const emit = defineEmits(buttonEmits)
 
-  props: buttonProps,
-  emits: buttonEmits,
+const buttonStyle = useButtonCustomStyle(props)
+const ns = useNamespace('button')
+const { _ref, _size, _type, _disabled, _props, shouldAddSpace, handleClick } =
+  useButton(props, emit)
+const buttonKls = computed(() => [
+  ns.b(),
+  ns.m(_type.value),
+  ns.m(_size.value),
+  ns.is('disabled', _disabled.value),
+  ns.is('loading', props.loading),
+  ns.is('plain', props.plain),
+  ns.is('round', props.round),
+  ns.is('circle', props.circle),
+  ns.is('text', props.text),
+  ns.is('link', props.link),
+  ns.is('has-bg', props.bg),
+])
 
-  setup(props, { emit, slots }) {
-    const buttonRef = ref()
-    const buttonGroupContext = inject(buttonGroupContextKey, undefined)
-    const globalConfig = useGlobalConfig('button')
-    const ns = useNamespace('button')
-    const autoInsertSpace = computed(
-      () =>
-        props.autoInsertSpace ?? globalConfig.value?.autoInsertSpace ?? false
-    )
-
-    // add space between two characters in Chinese
-    const shouldAddSpace = computed(() => {
-      const defaultSlot = slots.default?.()
-      if (autoInsertSpace.value && defaultSlot?.length === 1) {
-        const slot = defaultSlot[0]
-        if (slot?.type === Text) {
-          const text = slot.children
-          return /^\p{Unified_Ideograph}{2}$/u.test(text as string)
-        }
-      }
-      return false
-    })
-
-    const { form } = useFormItem()
-    const buttonSize = useSize(computed(() => buttonGroupContext?.size))
-    const buttonDisabled = useDisabled()
-    const buttonType = computed(
-      () => props.type || buttonGroupContext?.type || ''
-    )
-
-    // calculate hover & active color by color
-    const typeColor = computed(
-      () => useCssVar(`--el-color-${props.type}`).value
-    )
-    const buttonStyle = computed(() => {
-      let styles = {}
-
-      const buttonColor = props.color || typeColor.value
-
-      if (buttonColor) {
-        const shadeBgColor = new TinyColor(buttonColor).shade(10).toString()
-        if (props.plain) {
-          styles = {
-            '--el-button-bg-color': new TinyColor(buttonColor)
-              .tint(90)
-              .toString(),
-            '--el-button-text-color': buttonColor,
-            '--el-button-hover-text-color': 'var(--el-color-white)',
-            '--el-button-hover-bg-color': buttonColor,
-            '--el-button-hover-border-color': buttonColor,
-            '--el-button-active-bg-color': shadeBgColor,
-            '--el-button-active-text-color': 'var(--el-color-white)',
-            '--el-button-active-border-color': shadeBgColor,
-          }
-        } else {
-          const tintBgColor = new TinyColor(buttonColor).tint(20).toString()
-          styles = {
-            '--el-button-bg-color': buttonColor,
-            '--el-button-border-color': buttonColor,
-            '--el-button-hover-bg-color': tintBgColor,
-            '--el-button-hover-border-color': tintBgColor,
-            '--el-button-active-bg-color': shadeBgColor,
-            '--el-button-active-border-color': shadeBgColor,
-          }
-        }
-
-        if (buttonDisabled.value) {
-          const disabledButtonColor = new TinyColor(buttonColor)
-            .tint(50)
-            .toString()
-          styles['--el-button-disabled-bg-color'] = disabledButtonColor
-          styles['--el-button-disabled-border-color'] = disabledButtonColor
-        }
-      }
-
-      return styles
-    })
-
-    const handleClick = (evt: MouseEvent) => {
-      if (props.nativeType === 'reset') {
-        form?.resetFields()
-      }
-      emit('click', evt)
-    }
-
-    return {
-      buttonRef,
-      buttonStyle,
-
-      buttonSize,
-      buttonType,
-      buttonDisabled,
-
-      shouldAddSpace,
-
-      handleClick,
-
-      ns,
-    }
-  },
+defineExpose({
+  /** @description button html element */
+  ref: _ref,
+  /** @description button size */
+  size: _size,
+  /** @description button type */
+  type: _type,
+  /** @description button disabled */
+  disabled: _disabled,
+  /** @description whether adding space */
+  shouldAddSpace,
 })
 </script>

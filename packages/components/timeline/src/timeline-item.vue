@@ -1,14 +1,9 @@
 <template>
   <li :class="[ns.b(), { [ns.e('center')]: center }]">
-    <div :class="ns.e('tail')"></div>
+    <div :class="ns.e('tail')" />
     <div
       v-if="!$slots.dot"
-      :class="[
-        ns.e('node'),
-        ns.em('node', size || ''),
-        ns.em('node', type || ''),
-        ns.is('hollow', hollow),
-      ]"
+      :class="defaultNodeKls"
       :style="{
         backgroundColor: color,
       }"
@@ -18,7 +13,7 @@
       </el-icon>
     </div>
     <div v-if="$slots.dot" :class="ns.e('dot')">
-      <slot name="dot"></slot>
+      <slot name="dot" />
     </div>
 
     <div :class="ns.e('wrapper')">
@@ -30,7 +25,7 @@
       </div>
 
       <div :class="ns.e('content')">
-        <slot></slot>
+        <slot />
       </div>
 
       <div
@@ -43,23 +38,23 @@
   </li>
 </template>
 
-<script lang="ts">
-import { defineComponent } from 'vue'
+<script lang="ts" setup>
+import { computed } from 'vue'
 import { ElIcon } from '@element-plus/components/icon'
 import { useNamespace } from '@element-plus/hooks'
 import { timelineItemProps } from './timeline-item'
 
-export default defineComponent({
+defineOptions({
   name: 'ElTimelineItem',
-  components: {
-    ElIcon,
-  },
-  props: timelineItemProps,
-  setup() {
-    const ns = useNamespace('timeline-item')
-    return {
-      ns,
-    }
-  },
 })
+
+const props = defineProps(timelineItemProps)
+
+const ns = useNamespace('timeline-item')
+const defaultNodeKls = computed(() => [
+  ns.e('node'),
+  ns.em('node', props.size || ''),
+  ns.em('node', props.type || ''),
+  ns.is('hollow', props.hollow),
+])
 </script>
