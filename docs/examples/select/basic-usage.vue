@@ -1,30 +1,11 @@
 <template>
-  <el-select v-model="value" class="m-2" placeholder="Select" size="large">
+  <el-select v-model="value" placeholder="Select" style="width: 240px">
     <el-option
       v-for="item in options"
       :key="item.value"
       :label="item.label"
       :value="item.value"
-    >
-    </el-option>
-  </el-select>
-  <el-select v-model="value" class="m-2" placeholder="Select">
-    <el-option
-      v-for="item in options"
-      :key="item.value"
-      :label="item.label"
-      :value="item.value"
-    >
-    </el-option>
-  </el-select>
-  <el-select v-model="value" class="m-2" placeholder="Select" size="small">
-    <el-option
-      v-for="item in options"
-      :key="item.value"
-      :label="item.label"
-      :value="item.value"
-    >
-    </el-option>
+    />
   </el-select>
 </template>
 

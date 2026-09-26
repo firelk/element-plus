@@ -1,38 +1,60 @@
 import {
+  Fragment,
   computed,
   defineComponent,
   getCurrentInstance,
-  ref,
+  h,
+  mergeProps,
   nextTick,
   onMounted,
-  onUpdated,
+  ref,
   resolveDynamicComponent,
-  h,
   unref,
 } from 'vue'
-import { isClient } from '@vueuse/core'
-import { hasOwn, isNumber, isString } from '@element-plus/utils-v2'
-import getScrollBarWidth from '@element-plus/utils/scrollbar-width'
+import { useEventListener } from '@vueuse/core'
+import {
+  getScrollBarWidth,
+  hasOwn,
+  isClient,
+  isNumber,
+  isString,
+} from '@element-plus/utils'
+import { useNamespace } from '@element-plus/hooks'
 import Scrollbar from '../components/scrollbar'
 import { useGridWheel } from '../hooks/use-grid-wheel'
 import { useCache } from '../hooks/use-cache'
+import { useGridTouch } from '../hooks/use-grid-touch'
 import { virtualizedGridProps } from '../props'
-import { getScrollDir, getRTLOffsetType, isRTL } from '../utils'
+import { getRTLOffsetType, getScrollDir, isRTL } from '../utils'
 import {
   AUTO_ALIGNMENT,
   BACKWARD,
   FORWARD,
-  RTL,
   ITEM_RENDER_EVT,
-  SCROLL_EVT,
+  RTL,
   RTL_OFFSET_NAG,
-  RTL_OFFSET_POS_DESC,
   RTL_OFFSET_POS_ASC,
+  RTL_OFFSET_POS_DESC,
+  SCROLL_EVT,
 } from '../defaults'
 
-import type { CSSProperties, VNode, VNodeChild, StyleValue } from 'vue'
-import type { GridConstructorProps, Alignment, ScrollbarExpose } from '../types'
+import type {
+  CSSProperties,
+  Ref,
+  StyleValue,
+  UnwrapRef,
+  VNode,
+  VNodeChild,
+} from 'vue'
+import type {
+  Alignment,
+  GridConstructorProps,
+  GridScrollOptions,
+  GridStates,
+  ScrollbarExpose,
+} from '../types'
 import type { VirtualizedGridProps } from '../props'
+import type { DynamicSizeGridInstance } from '../components/dynamic-size-grid.ts'
 
 const createGrid = ({
   name,
@@ -49,6 +71,7 @@ const createGrid = ({
   getRowStopIndexForStartIndex,
 
   initCache,
+  injectToInstance,
   validateProps,
 }: GridConstructorProps<VirtualizedGridProps>) => {
   return defineComponent({
@@ -56,9 +79,12 @@ const createGrid = ({
     props: virtualizedGridProps,
     emits: [ITEM_RENDER_EVT, SCROLL_EVT],
     setup(props, { emit, expose, slots }) {
+      const ns = useNamespace('vl')
+
       validateProps(props)
       const instance = getCurrentInstance()!
       const cache = ref(initCache(props, instance))
+      injectToInstance?.(instance, cache)
       // refs
       // here windowRef and innerRef can be type of HTMLElement
       // or user defined component type, depends on the type passed
@@ -67,8 +93,8 @@ const createGrid = ({
       const hScrollbar = ref<ScrollbarExpose>()
       const vScrollbar = ref<ScrollbarExpose>()
       // innerRef is the actual container element which contains all the elements
-      const innerRef = ref(null)
-      const states = ref({
+      const innerRef = ref<HTMLElement>()
+      const states = ref<GridStates>({
         isScrolling: false,
         scrollLeft: isNumber(props.initScrollLeft) ? props.initScrollLeft : 0,
         scrollTop: isNumber(props.initScrollTop) ? props.initScrollTop : 0,
@@ -80,8 +106,10 @@ const createGrid = ({
       const getItemStyleCache = useCache()
 
       // computed
-      const parsedHeight = computed(() => parseInt(`${props.height}`, 10))
-      const parsedWidth = computed(() => parseInt(`${props.width}`, 10))
+      const parsedHeight = computed(() =>
+        Number.parseInt(`${props.height}`, 10)
+      )
+      const parsedWidth = computed(() => Number.parseInt(`${props.width}`, 10))
       const columnsToRender = computed(() => {
         const { totalColumn, totalRow, columnCache } = props
         const { isScrolling, xAxisScrollDir, scrollLeft } = unref(states)
@@ -184,6 +212,10 @@ const createGrid = ({
           height,
           pointerEvents: unref(states).isScrolling ? 'none' : undefined,
           width,
+
+          // fix scrolling issues in Firefox.
+          margin: 0,
+          boxSizing: 'border-box',
         }
       })
 
@@ -203,8 +235,7 @@ const createGrid = ({
           // emit the render item event with
           // [xAxisInvisibleStart, xAxisInvisibleEnd, xAxisVisibleStart, xAxisVisibleEnd]
           // [yAxisInvisibleStart, yAxisInvisibleEnd, yAxisVisibleStart, yAxisVisibleEnd]
-          emit(
-            ITEM_RENDER_EVT,
+          emit(ITEM_RENDER_EVT, {
             columnCacheStart,
             columnCacheEnd,
             rowCacheStart,
@@ -212,8 +243,8 @@ const createGrid = ({
             columnVisibleStart,
             columnVisibleEnd,
             rowVisibleStart,
-            rowVisibleEnd
-          )
+            rowVisibleEnd,
+          })
         }
 
         const {
@@ -223,14 +254,13 @@ const createGrid = ({
           xAxisScrollDir,
           yAxisScrollDir,
         } = unref(states)
-        emit(
-          SCROLL_EVT,
+        emit(SCROLL_EVT, {
           xAxisScrollDir,
           scrollLeft,
           yAxisScrollDir,
           scrollTop,
-          updateRequested
-        )
+          updateRequested,
+        })
       }
 
       const onScroll = (e: Event) => {
@@ -244,6 +274,7 @@ const createGrid = ({
         } = e.currentTarget as HTMLElement
 
         const _states = unref(states)
+
         if (
           _states.scrollTop === scrollTop &&
           _states.scrollLeft === scrollLeft
@@ -272,13 +303,14 @@ const createGrid = ({
             0,
             Math.min(scrollTop, scrollHeight - clientHeight)
           ),
-          updateRequested: false,
+          updateRequested: true,
           xAxisScrollDir: getScrollDir(_states.scrollLeft, _scrollLeft),
           yAxisScrollDir: getScrollDir(_states.scrollTop, scrollTop),
         }
 
-        nextTick(resetIsScrolling)
+        nextTick(() => resetIsScrolling())
 
+        onUpdated()
         emitEvents()
       }
 
@@ -304,16 +336,20 @@ const createGrid = ({
         {
           atXStartEdge: computed(() => states.value.scrollLeft <= 0),
           atXEndEdge: computed(
-            () => states.value.scrollLeft >= estimatedTotalWidth.value
+            () =>
+              states.value.scrollLeft >=
+              estimatedTotalWidth.value - unref(parsedWidth)
           ),
           atYStartEdge: computed(() => states.value.scrollTop <= 0),
           atYEndEdge: computed(
-            () => states.value.scrollTop >= estimatedTotalHeight.value
+            () =>
+              states.value.scrollTop >=
+              estimatedTotalHeight.value - unref(parsedHeight)
           ),
         },
         (x: number, y: number) => {
           hScrollbar.value?.onMouseUp?.()
-          hScrollbar.value?.onMouseUp?.()
+          vScrollbar.value?.onMouseUp?.()
           const width = unref(parsedWidth)
           const height = unref(parsedHeight)
           scrollTo({
@@ -329,10 +365,14 @@ const createGrid = ({
         }
       )
 
+      useEventListener(windowRef, 'wheel', onWheel, {
+        passive: false,
+      })
+
       const scrollTo = ({
         scrollLeft = states.value.scrollLeft,
         scrollTop = states.value.scrollTop,
-      }) => {
+      }: GridScrollOptions) => {
         scrollLeft = Math.max(scrollLeft, 0)
         scrollTop = Math.max(scrollTop, 0)
         const _states = unref(states)
@@ -352,8 +392,22 @@ const createGrid = ({
           updateRequested: true,
         }
 
-        nextTick(resetIsScrolling)
+        nextTick(() => resetIsScrolling())
+
+        onUpdated()
+        emitEvents()
       }
+
+      const { touchStartX, touchStartY, handleTouchStart, handleTouchMove } =
+        useGridTouch(
+          windowRef,
+          states,
+          scrollTo,
+          estimatedTotalWidth,
+          estimatedTotalHeight,
+          parsedWidth,
+          parsedHeight
+        )
 
       const scrollToItem = (
         rowIndex = 0,
@@ -363,7 +417,7 @@ const createGrid = ({
         const _states = unref(states)
         columnIdx = Math.max(0, Math.min(columnIdx, props.totalColumn! - 1))
         rowIndex = Math.max(0, Math.min(rowIndex, props.totalRow! - 1))
-        const scrollBarWidth = getScrollBarWidth()
+        const scrollBarWidth = getScrollBarWidth(ns.namespace.value)
 
         const _cache = unref(cache)
         const estimatedHeight = getEstimatedTotalHeight(props, _cache)
@@ -376,7 +430,7 @@ const createGrid = ({
             alignment,
             _states.scrollLeft,
             _cache,
-            estimatedWidth > props.width! ? scrollBarWidth : 0
+            estimatedWidth > (props.width as number) ? scrollBarWidth : 0
           ),
           scrollTop: getRowOffset(
             props,
@@ -384,17 +438,13 @@ const createGrid = ({
             alignment,
             _states.scrollTop,
             _cache,
-            estimatedHeight > props.height! ? scrollBarWidth : 0
+            estimatedHeight > (props.height as number) ? scrollBarWidth : 0
           ),
         })
       }
 
-      const getItemStyle = (
-        rowIndex: number,
-        columnIndex: number
-      ): CSSProperties => {
+      const getItemStyle = (rowIndex: number, columnIndex: number) => {
         const { columnWidth, direction, rowHeight } = props
-
         const itemStyleCache = getItemStyleCache.value(
           clearCache && columnWidth,
           clearCache && rowHeight,
@@ -405,7 +455,7 @@ const createGrid = ({
         const key = `${rowIndex},${columnIndex}`
 
         if (hasOwn(itemStyleCache, key)) {
-          return itemStyleCache[key]
+          return itemStyleCache[key] as CSSProperties
         } else {
           const [, left] = getColumnPosition(props, columnIndex, unref(cache))
           const _cache = unref(cache)
@@ -423,15 +473,13 @@ const createGrid = ({
             width: `${width}px`,
           }
 
-          return itemStyleCache[key]
+          return itemStyleCache[key] as CSSProperties
         }
       }
 
       // TODO: debounce setting is scrolling.
 
       const resetIsScrolling = () => {
-        // timer = null
-
         states.value.isScrolling = false
         nextTick(() => {
           getItemStyleCache.value(-1, null, null)
@@ -455,12 +503,11 @@ const createGrid = ({
         emitEvents()
       })
 
-      onUpdated(() => {
+      const onUpdated = () => {
         const { direction } = props
         const { scrollLeft, scrollTop, updateRequested } = unref(states)
 
         const windowElement = unref(windowRef)
-
         if (updateRequested && windowElement) {
           if (direction === RTL) {
             switch (getRTLOffsetType()) {
@@ -485,21 +532,37 @@ const createGrid = ({
 
           windowElement.scrollTop = Math.max(0, scrollTop)
         }
-      })
+      }
+
+      const { resetAfterColumnIndex, resetAfterRowIndex, resetAfter } =
+        instance.proxy as DynamicSizeGridInstance
 
       expose({
         windowRef,
         innerRef,
         getItemStyleCache,
+        touchStartX,
+        touchStartY,
+        handleTouchStart,
+        handleTouchMove,
         scrollTo,
         scrollToItem,
         states,
+        resetAfterColumnIndex,
+        resetAfterRowIndex,
+        resetAfter,
       })
 
       // rendering part
 
       const renderScrollbars = () => {
-        const { totalColumn, totalRow } = props
+        const {
+          scrollbarAlwaysOn,
+          scrollbarStartGap,
+          scrollbarEndGap,
+          totalColumn,
+          totalRow,
+        } = props
 
         const width = unref(parsedWidth)
         const height = unref(parsedHeight)
@@ -508,6 +571,10 @@ const createGrid = ({
         const { scrollLeft, scrollTop } = unref(states)
         const horizontalScrollbar = h(Scrollbar, {
           ref: hScrollbar,
+          alwaysOn: scrollbarAlwaysOn,
+          startGap: scrollbarStartGap,
+          endGap: scrollbarEndGap,
+          class: ns.e('horizontal'),
           clientSize: width,
           layout: 'horizontal',
           onScroll: onHorizontalScroll,
@@ -519,11 +586,16 @@ const createGrid = ({
 
         const verticalScrollbar = h(Scrollbar, {
           ref: vScrollbar,
+          alwaysOn: scrollbarAlwaysOn,
+          startGap: scrollbarStartGap,
+          endGap: scrollbarEndGap,
+          class: ns.e('vertical'),
           clientSize: height,
           layout: 'vertical',
           onScroll: onVerticalScroll,
           ratio: (height * 100) / estimatedHeight,
           scrollFrom: scrollTop / (estimatedHeight - height),
+
           total: totalColumn,
           visible: true,
         })
@@ -537,22 +609,26 @@ const createGrid = ({
       const renderItems = () => {
         const [columnStart, columnEnd] = unref(columnsToRender)
         const [rowStart, rowEnd] = unref(rowsToRender)
-        const { data, totalColumn, totalRow, useIsScrolling } = props
+        const { data, totalColumn, totalRow, useIsScrolling, itemKey } = props
         const children: VNodeChild[] = []
         if (totalRow > 0 && totalColumn > 0) {
           for (let row = rowStart; row <= rowEnd; row++) {
             for (let column = columnStart; column <= columnEnd; column++) {
+              const key = itemKey({ columnIndex: column, data, rowIndex: row })
               children.push(
-                slots.default?.({
-                  columnIndex: column,
-                  data,
-                  key: column,
-                  isScrolling: useIsScrolling
-                    ? unref(states).isScrolling
-                    : undefined,
-                  style: getItemStyle(row, column),
-                  rowIndex: row,
-                })
+                h(
+                  Fragment,
+                  { key },
+                  slots.default?.({
+                    columnIndex: column,
+                    data,
+                    isScrolling: useIsScrolling
+                      ? unref(states).isScrolling
+                      : undefined,
+                    style: getItemStyle(row, column),
+                    rowIndex: row,
+                  })
+                )
               )
             }
           }
@@ -566,10 +642,10 @@ const createGrid = ({
         return [
           h(
             Inner,
-            {
+            mergeProps(props.innerProps, {
               style: unref(innerStyle),
               ref: innerRef,
-            },
+            }),
             !isString(Inner)
               ? {
                   default: () => children,
@@ -590,7 +666,8 @@ const createGrid = ({
           'div',
           {
             key: 0,
-            class: 'el-vg__wrapper',
+            class: ns.e('wrapper'),
+            role: props.role,
           },
           [
             h(
@@ -599,7 +676,6 @@ const createGrid = ({
                 class: props.className,
                 style: unref(windowStyle),
                 onScroll,
-                onWheel,
                 ref: windowRef,
               },
               !isString(Container) ? { default: () => Inner } : Inner
@@ -614,4 +690,19 @@ const createGrid = ({
     },
   })
 }
+
 export default createGrid
+
+export type GridInstance = InstanceType<ReturnType<typeof createGrid>> &
+  UnwrapRef<{
+    windowRef: Ref<HTMLElement>
+    innerRef: Ref<HTMLElement>
+    getItemStyleCache: ReturnType<typeof useCache>
+    scrollTo: (scrollOptions: GridScrollOptions) => void
+    scrollToItem: (
+      rowIndex: number,
+      columnIndex: number,
+      alignment: Alignment
+    ) => void
+    states: Ref<GridStates>
+  }>

@@ -24,7 +24,10 @@
 </template>
 
 <script lang="ts" setup>
-import type { TableColumnCtx } from 'element-plus/es/components/table/src/table-column/defaults'
+import { h } from 'vue'
+
+import type { VNode } from 'vue'
+import type { TableColumnCtx } from 'element-plus'
 
 interface Product {
   id: string
@@ -34,24 +37,26 @@ interface Product {
   amount3: number
 }
 
-interface SummaryMethodProps<T = Product> {
+interface SummaryMethodProps<T extends Product = Product> {
   columns: TableColumnCtx<T>[]
   data: T[]
 }
 
 const getSummaries = (param: SummaryMethodProps) => {
   const { columns, data } = param
-  const sums: string[] = []
+  const sums: (string | VNode)[] = []
   columns.forEach((column, index) => {
     if (index === 0) {
-      sums[index] = 'Total Cost'
+      sums[index] = h('div', { style: { textDecoration: 'underline' } }, [
+        'Total Cost',
+      ])
       return
     }
     const values = data.map((item) => Number(item[column.property]))
-    if (!values.every((value) => isNaN(value))) {
+    if (!values.every((value) => Number.isNaN(value))) {
       sums[index] = `$ ${values.reduce((prev, curr) => {
         const value = Number(curr)
-        if (!isNaN(value)) {
+        if (!Number.isNaN(value)) {
           return prev + curr
         } else {
           return prev

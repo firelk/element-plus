@@ -1,14 +1,16 @@
 import { useNamespace } from '@element-plus/hooks'
 import {
+  ensurePosition,
   getFixedColumnOffset,
   getFixedColumnsClass,
-  ensurePosition,
 } from '../util'
 import useMapState from './mapState-helper'
+
 import type { TableColumnCtx } from '../table-column/defaults'
+import type { DefaultRow } from '../table/defaults'
 import type { TableFooter } from '.'
 
-function useStyle<T>(props: TableFooter<T>) {
+function useStyle<T extends DefaultRow>(props: TableFooter<T>) {
   const { columns } = useMapState()
   const ns = useNamespace('table')
 

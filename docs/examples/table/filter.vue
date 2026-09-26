@@ -19,6 +19,7 @@
     <el-table-column prop="name" label="Name" width="180" />
     <el-table-column prop="address" label="Address" :formatter="formatter" />
 
+    <!-- @vue-generic {User} -->
     <el-table-column
       prop="tag"
       label="Tag"
@@ -32,7 +33,7 @@
     >
       <template #default="scope">
         <el-tag
-          :type="scope.row.tag === 'Home' ? '' : 'success'"
+          :type="scope.row.tag === 'Home' ? 'primary' : 'success'"
           disable-transitions
           >{{ scope.row.tag }}</el-tag
         >
@@ -43,8 +44,8 @@
 
 <script lang="ts" setup>
 import { ref } from 'vue'
-import type { TableColumnCtx } from 'element-plus/es/components/table/src/table-column/defaults'
-import type { ElTable } from 'element-plus'
+
+import type { TableColumnCtx, TableInstance } from 'element-plus'
 
 interface User {
   date: string
@@ -53,15 +54,12 @@ interface User {
   tag: string
 }
 
-const tableRef = ref<InstanceType<typeof ElTable>>()
+const tableRef = ref<TableInstance>()
 
 const resetDateFilter = () => {
   tableRef.value!.clearFilter(['date'])
 }
-// TODO: improvement typing when refactor table
 const clearFilter = () => {
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-expect-error
   tableRef.value!.clearFilter()
 }
 const formatter = (row: User, column: TableColumnCtx<User>) => {

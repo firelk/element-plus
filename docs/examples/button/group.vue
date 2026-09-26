@@ -1,35 +1,33 @@
 <template>
-  <el-button-group>
+  <el-button-group class="mb-4">
     <el-button type="primary" :icon="ArrowLeft">Previous Page</el-button>
     <el-button type="primary">
       Next Page<el-icon class="el-icon--right"><ArrowRight /></el-icon>
     </el-button>
   </el-button-group>
+  <br />
+  <el-radio-group v-model="direction" class="mb-2">
+    <el-radio value="horizontal">Horizontal</el-radio>
+    <el-radio value="vertical">Vertical</el-radio>
+  </el-radio-group>
+  <br />
 
-  <el-button-group class="ml-4">
-    <el-button type="primary" :icon="Edit"></el-button>
-    <el-button type="primary" :icon="Share"></el-button>
-    <el-button type="primary" :icon="Delete"></el-button>
+  <el-button-group :direction="direction">
+    <el-button type="primary" :icon="House" />
+    <el-button type="primary" :icon="Operation" />
+    <el-button type="primary" :icon="Notification" />
   </el-button-group>
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import {
   ArrowLeft,
-  Edit,
-  Share,
-  Delete,
   ArrowRight,
+  House,
+  Notification,
+  Operation,
 } from '@element-plus/icons-vue'
-</script>
 
-<style>
-:root {
-  --el-color-primary: #409eff;
-  --el-color-success: #67c23a;
-  --el-color-warning: #e6a23c;
-  --el-color-danger: #f56c6c;
-  --el-color-error: #f56c6c;
-  --el-color-info: #909399;
-}
-</style>
+const direction = ref<'horizontal' | 'vertical'>('horizontal')
+</script>

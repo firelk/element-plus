@@ -1,26 +1,20 @@
 <template>
   <div :class="[ns.e('item'), ns.e(variant)]">
-    <img-placeholder v-if="variant === 'image'" />
+    <picture-filled v-if="variant === 'image'" />
   </div>
 </template>
 
-<script lang="ts">
-import { defineComponent } from 'vue'
+<script lang="ts" setup>
 import { useNamespace } from '@element-plus/hooks'
-import ImgPlaceholder from './image-placeholder.vue'
-import { skeletonItemProps } from './skeleton-item'
+import { PictureFilled } from '@element-plus/icons-vue'
 
-export default defineComponent({
+import type { SkeletonItemProps } from './skeleton-item.ts'
+
+defineOptions({
   name: 'ElSkeletonItem',
-  components: {
-    ImgPlaceholder,
-  },
-  props: skeletonItemProps,
-  setup() {
-    const ns = useNamespace('skeleton')
-    return {
-      ns,
-    }
-  },
 })
+withDefaults(defineProps<SkeletonItemProps>(), {
+  variant: 'text',
+})
+const ns = useNamespace('skeleton')
 </script>

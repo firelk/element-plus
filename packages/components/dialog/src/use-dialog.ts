@@ -1,48 +1,143 @@
-import { computed, ref, watch, nextTick, onMounted } from 'vue'
-import { useTimeoutFn, isClient } from '@vueuse/core'
-
 import {
+  computed,
+  getCurrentInstance,
+  nextTick,
+  onMounted,
+  ref,
+  watch,
+} from 'vue'
+import { useTimeoutFn } from '@vueuse/core'
+import {
+  defaultNamespace,
+  useId,
   useLockscreen,
-  useRestoreActive,
-  useModal,
   useZIndex,
 } from '@element-plus/hooks'
 import { UPDATE_MODEL_EVENT } from '@element-plus/constants'
-import { isNumber } from '@element-plus/utils-v2'
+import {
+  addUnit,
+  debugWarn,
+  isArray,
+  isClient,
+  isFunction,
+  isObject,
+} from '@element-plus/utils'
+import { useGlobalConfig } from '@element-plus/components/config-provider'
+import { DEFAULT_DIALOG_TRANSITION } from './constants'
 
-import type { CSSProperties, Ref, SetupContext } from 'vue'
+import type { CSSProperties, Ref, SetupContext, TransitionProps } from 'vue'
+import type { Arrayable } from '@element-plus/utils'
 import type { DialogEmits, DialogProps } from './dialog'
+
+const COMPONENT_NAME = 'ElDialog'
 
 export const useDialog = (
   props: DialogProps,
-  { emit }: SetupContext<DialogEmits>,
   targetRef: Ref<HTMLElement | undefined>
 ) => {
+  const instance = getCurrentInstance()!
+  const emit = instance.emit as SetupContext<DialogEmits>['emit']
+  const { nextZIndex } = useZIndex()
+
+  let lastPosition = ''
+  const titleId = useId()
+  const bodyId = useId()
   const visible = ref(false)
   const closed = ref(false)
-  const rendered = ref(false) // when desctroyOnClose is true, we initialize it as false vise versa
-  const { nextZIndex } = useZIndex()
-  const zIndex = ref(props.zIndex || nextZIndex())
+  const rendered = ref(false) // when destroyOnClose is true, we initialize it as false vise versa
+  const zIndex = ref(props.zIndex ?? nextZIndex())
+  const closing = ref(false)
 
   let openTimer: (() => void) | undefined = undefined
   let closeTimer: (() => void) | undefined = undefined
 
-  const normalizeWidth = computed(() =>
-    isNumber(props.width) ? `${props.width}px` : props.width
-  )
+  const config = useGlobalConfig()
+
+  const namespace = computed(() => config.value?.namespace ?? defaultNamespace)
+  const globalConfig = computed(() => config.value?.dialog)
 
   const style = computed<CSSProperties>(() => {
     const style: CSSProperties = {}
-    const varPrefix = `--el-dialog`
+    const varPrefix = `--${namespace.value}-dialog` as const
     if (!props.fullscreen) {
       if (props.top) {
         style[`${varPrefix}-margin-top`] = props.top
       }
-      if (props.width) {
-        style[`${varPrefix}-width`] = normalizeWidth.value
+      const width = addUnit(props.width)
+      if (width) {
+        style[`${varPrefix}-width`] = width
       }
     }
     return style
+  })
+
+  const _draggable = computed(
+    () =>
+      (props.draggable ?? globalConfig.value?.draggable ?? false) &&
+      !props.fullscreen
+  )
+
+  const _alignCenter = computed(
+    () => props.alignCenter ?? globalConfig.value?.alignCenter ?? false
+  )
+
+  const _overflow = computed(
+    () => props.overflow ?? globalConfig.value?.overflow ?? false
+  )
+
+  const penetrable = computed(
+    () => props.modalPenetrable && !props.modal && !props.fullscreen
+  )
+
+  const overlayDialogStyle = computed<CSSProperties>(() => {
+    if (_alignCenter.value) {
+      return { display: 'flex' }
+    }
+    return {}
+  })
+
+  const transitionConfig = computed(() => {
+    const transition =
+      props.transition ??
+      globalConfig.value?.transition ??
+      DEFAULT_DIALOG_TRANSITION
+    const baseConfig = {
+      name: transition as string,
+      onAfterEnter: afterEnter,
+      onBeforeLeave: beforeLeave,
+      onAfterLeave: afterLeave,
+    }
+    if (isObject(transition)) {
+      const config = { ...transition } as TransitionProps
+      const _mergeHook = (
+        userHook: Arrayable<(el: Element) => void> | undefined,
+        defaultHook: () => void
+      ) => {
+        return (el: Element) => {
+          if (isArray(userHook)) {
+            userHook.forEach((fn) => {
+              if (isFunction(fn)) fn(el)
+            })
+          } else if (isFunction(userHook)) {
+            userHook(el)
+          }
+          defaultHook()
+        }
+      }
+      config.onAfterEnter = _mergeHook(config.onAfterEnter, afterEnter)
+      config.onBeforeLeave = _mergeHook(config.onBeforeLeave, beforeLeave)
+      config.onAfterLeave = _mergeHook(config.onAfterLeave, afterLeave)
+      if (!config.name) {
+        config.name = DEFAULT_DIALOG_TRANSITION
+        debugWarn(
+          COMPONENT_NAME,
+          `transition.name is missing when using object syntax, fallback to '${DEFAULT_DIALOG_TRANSITION}'`
+        )
+      }
+      return config
+    }
+
+    return baseConfig
   })
 
   function afterEnter() {
@@ -55,9 +150,11 @@ export const useDialog = (
     if (props.destroyOnClose) {
       rendered.value = false
     }
+    closing.value = false
   }
 
   function beforeLeave() {
+    closing.value = true
     emit('close')
   }
 
@@ -73,7 +170,6 @@ export const useDialog = (
   }
 
   function close() {
-    // if (this.willClose && !this.willClose()) return;
     openTimer?.()
     closeTimer?.()
 
@@ -84,13 +180,13 @@ export const useDialog = (
     }
   }
 
-  function hide(shouldCancel: boolean) {
-    if (shouldCancel) return
-    closed.value = true
-    visible.value = false
-  }
-
   function handleClose() {
+    function hide(shouldCancel?: boolean) {
+      if (shouldCancel) return
+      closed.value = true
+      visible.value = false
+    }
+
     if (props.beforeClose) {
       props.beforeClose(hide)
     } else {
@@ -105,13 +201,7 @@ export const useDialog = (
   }
 
   function doOpen() {
-    if (!isClient) {
-      return
-    }
-
-    // if (props.willOpen?.()) {
-    //  return
-    // }
+    if (!isClient) return
     visible.value = true
   }
 
@@ -119,33 +209,60 @@ export const useDialog = (
     visible.value = false
   }
 
+  function onOpenAutoFocus() {
+    emit('openAutoFocus')
+  }
+
+  function onCloseAutoFocus() {
+    emit('closeAutoFocus')
+  }
+
+  function onFocusoutPrevented(event: CustomEvent) {
+    if (event.detail?.focusReason === 'pointer') {
+      event.preventDefault()
+    }
+  }
+
   if (props.lockScroll) {
     useLockscreen(visible)
   }
 
-  if (props.closeOnPressEscape) {
-    useModal(
-      {
-        handleClose,
-      },
-      visible
-    )
+  function onCloseRequested() {
+    if (props.closeOnPressEscape) {
+      handleClose()
+    }
   }
 
-  useRestoreActive(visible)
+  function bringToFront() {
+    if (!visible.value || !penetrable.value || props.zIndex !== undefined) {
+      return
+    }
+
+    zIndex.value = nextZIndex()
+  }
+
+  watch(
+    () => props.zIndex,
+    () => {
+      zIndex.value = props.zIndex ?? nextZIndex()
+    }
+  )
 
   watch(
     () => props.modelValue,
     (val) => {
       if (val) {
         closed.value = false
+        closing.value = false
         open()
         rendered.value = true // enables lazy rendering
-        emit('open')
-        zIndex.value = props.zIndex ? zIndex.value++ : nextZIndex()
+        zIndex.value = props.zIndex ?? nextZIndex()
         // this.$el.addEventListener('scroll', this.updatePopper)
         nextTick(() => {
+          emit('open')
           if (targetRef.value) {
+            targetRef.value.parentElement!.scrollTop = 0
+            targetRef.value.parentElement!.scrollLeft = 0
             targetRef.value.scrollTop = 0
           }
         })
@@ -154,6 +271,19 @@ export const useDialog = (
         if (visible.value) {
           close()
         }
+      }
+    }
+  )
+
+  watch(
+    () => props.fullscreen,
+    (val) => {
+      if (!targetRef.value) return
+      if (val) {
+        lastPosition = targetRef.value.style.transform
+        targetRef.value.style.transform = ''
+      } else {
+        targetRef.value.style.transform = lastPosition
       }
     }
   )
@@ -174,10 +304,24 @@ export const useDialog = (
     onModalClick,
     close,
     doClose,
+    onOpenAutoFocus,
+    onCloseAutoFocus,
+    onCloseRequested,
+    onFocusoutPrevented,
+    bringToFront,
+    titleId,
+    bodyId,
     closed,
     style,
+    overlayDialogStyle,
     rendered,
     visible,
     zIndex,
+    transitionConfig,
+    _draggable,
+    _alignCenter,
+    _overflow,
+    closing,
+    penetrable,
   }
 }

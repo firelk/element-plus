@@ -1,258 +1,301 @@
 <template>
-  <form :class="formKls">
-    <slot></slot>
+  <form ref="formRef" :class="formClasses">
+    <slot />
   </form>
 </template>
 
-<script lang="ts">
+<script lang="ts" setup>
+import { computed, provide, reactive, ref, toRefs, watch } from 'vue'
+import { cloneDeep } from 'lodash-unified'
 import {
-  computed,
-  defineComponent,
-  provide,
-  reactive,
-  ref,
-  toRefs,
-  watch,
-} from 'vue'
-import { elFormKey } from '@element-plus/tokens'
-import { debugWarn } from '@element-plus/utils-v2'
-import { useSize } from '@element-plus/hooks'
+  NOOP,
+  debugWarn,
+  ensureArray,
+  getProp,
+  isArray,
+  isFunction,
+} from '@element-plus/utils'
+import { useNamespace } from '@element-plus/hooks'
+import { useFormSize } from './hooks'
+import { formContextKey } from './constants'
+import { formEmits } from './form'
+import { filterFields, useFormLabelWidth } from './utils'
+
 import type { ValidateFieldsError } from 'async-validator'
-
-import type { PropType } from 'vue'
-import type { ComponentSize } from '@element-plus/constants'
-import type { FormRulesMap } from './form.type'
+import type { Arrayable } from '@element-plus/utils'
+import type { FormProps } from './form'
 import type {
-  ElFormItemContext as FormItemCtx,
-  ValidateFieldCallback,
-} from '@element-plus/tokens'
+  FormContext,
+  FormItemContext,
+  FormValidateCallback,
+  FormValidationResult,
+} from './types'
+import type { FormItemProp } from './form-item'
 
-function useFormLabelWidth() {
-  const potentialLabelWidthArr = ref([])
-  const autoLabelWidth = computed(() => {
-    if (!potentialLabelWidthArr.value.length) return '0'
-    const max = Math.max(...potentialLabelWidthArr.value)
-    return max ? `${max}px` : ''
-  })
+const COMPONENT_NAME = 'ElForm'
+defineOptions({
+  name: COMPONENT_NAME,
+})
+const props = withDefaults(defineProps<FormProps>(), {
+  labelPosition: 'right',
+  requireAsteriskPosition: 'left',
+  labelWidth: '',
+  labelSuffix: '',
+  showMessage: true,
+  validateOnRuleChange: true,
+  scrollIntoViewOptions: true,
+})
+const emit = defineEmits(formEmits)
 
-  function getLabelWidthIndex(width: number) {
-    const index = potentialLabelWidthArr.value.indexOf(width)
-    if (index === -1) {
-      debugWarn('Form', `unexpected width ${width}`)
+const formRef = ref<HTMLElement>()
+const fields = reactive<FormItemContext[]>([])
+const initialValues = new Map<string, any>()
+
+const formSize = useFormSize()
+const ns = useNamespace('form')
+const formClasses = computed(() => {
+  const { labelPosition, inline } = props
+  return [
+    ns.b(),
+    ns.m(formSize.value || 'default'),
+    {
+      [ns.m(`label-${labelPosition}`)]: labelPosition,
+      [ns.m('inline')]: inline,
+    },
+  ]
+})
+
+const getField: FormContext['getField'] = (prop) => {
+  return filterFields(fields, [prop])[0]
+}
+
+const addField: FormContext['addField'] = (field) => {
+  if (!fields.includes(field)) {
+    fields.push(field)
+  }
+  if (field.propString) {
+    if (initialValues.has(field.propString)) {
+      field.setInitialValue(initialValues.get(field.propString))
+    } else {
+      initialValues.set(field.propString, cloneDeep(field.fieldValue))
     }
-    return index
-  }
-
-  function registerLabelWidth(val: number, oldVal: number) {
-    if (val && oldVal) {
-      const index = getLabelWidthIndex(oldVal)
-      potentialLabelWidthArr.value.splice(index, 1, val)
-    } else if (val) {
-      potentialLabelWidthArr.value.push(val)
-    }
-  }
-
-  function deregisterLabelWidth(val: number) {
-    const index = getLabelWidthIndex(val)
-    index > -1 && potentialLabelWidthArr.value.splice(index, 1)
-  }
-
-  return {
-    autoLabelWidth,
-    registerLabelWidth,
-    deregisterLabelWidth,
   }
 }
 
-export interface Callback {
-  (isValid?: boolean, invalidFields?: ValidateFieldsError): void
+const removeField: FormContext['removeField'] = (field, oldPropString?) => {
+  if (oldPropString) {
+    // Prop changed on a live field: delete stale key, field stays in fields[]
+    initialValues.delete(oldPropString)
+    return
+  }
+  // Unmount: splice from array, cache initialValue for potential remount
+  const idx = fields.indexOf(field)
+  if (idx > -1) {
+    fields.splice(idx, 1)
+    if (field.propString) {
+      initialValues.set(field.propString, cloneDeep(field.getInitialValue()))
+    }
+  }
 }
 
-export default defineComponent({
-  name: 'ElForm',
-  props: {
-    model: Object,
-    rules: Object as PropType<FormRulesMap>,
-    labelPosition: String,
-    labelWidth: {
-      type: [String, Number],
-      default: '',
-    },
-    labelSuffix: {
-      type: String,
-      default: '',
-    },
-    inline: Boolean,
-    inlineMessage: Boolean,
-    statusIcon: Boolean,
-    showMessage: {
-      type: Boolean,
-      default: true,
-    },
-    size: String as PropType<ComponentSize>,
-    disabled: Boolean,
-    validateOnRuleChange: {
-      type: Boolean,
-      default: true,
-    },
-    hideRequiredAsterisk: {
-      type: Boolean,
-      default: false,
-    },
-    scrollToError: Boolean,
-  },
-  emits: ['validate'],
-  setup(props, { emit }) {
-    const fields: FormItemCtx[] = []
-
-    watch(
-      () => props.rules,
-      () => {
-        fields.forEach((field) => {
-          field.evaluateValidationEnabled()
-        })
-
-        if (props.validateOnRuleChange) {
-          validate(() => ({}))
-        }
-      }
+const setInitialValues: FormContext['setInitialValues'] = (initModel) => {
+  if (!props.model) {
+    debugWarn(COMPONENT_NAME, 'model is required for setInitialValues to work.')
+    return
+  }
+  if (!initModel) {
+    debugWarn(
+      COMPONENT_NAME,
+      'initModel is required for setInitialValues to work.'
     )
+    return
+  }
 
-    const formSize = useSize()
-    const prefix = 'el-form'
-    const formKls = computed(() => {
-      const { labelPosition, inline } = props
-      return [
-        prefix,
-        `${prefix}--${formSize.value}`,
-        labelPosition ? `${prefix}--label-${labelPosition}` : '',
-        inline ? `${prefix}--inline` : '',
-      ]
-    })
+  for (const key of initialValues.keys()) {
+    initialValues.set(key, cloneDeep(getProp(initModel, key).value))
+  }
+  fields.forEach((field) => {
+    if (field.prop) {
+      field.setInitialValue(getProp(initModel, field.prop).value)
+    }
+  })
+}
 
-    const addField = (field: FormItemCtx) => {
-      if (field) {
-        fields.push(field)
+const resetFields: FormContext['resetFields'] = (properties = []) => {
+  if (!props.model) {
+    debugWarn(COMPONENT_NAME, 'model is required for resetFields to work.')
+    return
+  }
+
+  filterFields(fields, properties).forEach((field) => field.resetField())
+
+  const activePropStrings = new Set(
+    fields.map((f) => f.propString).filter(Boolean)
+  )
+  const propsToCheck =
+    properties.length > 0
+      ? ensureArray(properties).map((p) => (isArray(p) ? p.join('.') : p))
+      : [...initialValues.keys()]
+
+  for (const propString of propsToCheck) {
+    if (!activePropStrings.has(propString) && initialValues.has(propString)) {
+      getProp(props.model, propString).value = cloneDeep(
+        initialValues.get(propString)
+      )
+    }
+  }
+}
+
+const clearValidate: FormContext['clearValidate'] = (props = []) => {
+  filterFields(fields, props).forEach((field) => field.clearValidate())
+}
+
+const isValidatable = computed(() => {
+  const hasModel = !!props.model
+  if (!hasModel) {
+    debugWarn(COMPONENT_NAME, 'model is required for validate to work.')
+  }
+  return hasModel
+})
+
+const obtainValidateFields = (props: Arrayable<FormItemProp>) => {
+  if (fields.length === 0) return []
+
+  const filteredFields = filterFields(fields, props)
+  if (!filteredFields.length) {
+    debugWarn(COMPONENT_NAME, 'please pass correct props!')
+    return []
+  }
+  return filteredFields
+}
+
+const validate = async (
+  callback?: FormValidateCallback
+): FormValidationResult => validateField(undefined, callback)
+
+const doValidateField = async (
+  props: Arrayable<FormItemProp> = []
+): Promise<boolean> => {
+  if (!isValidatable.value) return false
+
+  const fields = obtainValidateFields(props)
+  if (fields.length === 0) return true
+
+  let validationErrors: ValidateFieldsError = {}
+  for (const field of fields) {
+    try {
+      await field.validate('')
+      if (field.validateState === 'error' && !field.error) field.resetField()
+    } catch (fields) {
+      validationErrors = {
+        ...validationErrors,
+        ...(fields as ValidateFieldsError),
       }
     }
+  }
 
-    const removeField = (field: FormItemCtx) => {
-      if (field.prop) {
-        fields.splice(fields.indexOf(field), 1)
+  if (Object.keys(validationErrors).length === 0) return true
+  return Promise.reject(validationErrors)
+}
+
+const validateField: FormContext['validateField'] = async (
+  modelProps = [],
+  callback
+) => {
+  let result = false
+  const shouldThrow = !isFunction(callback)
+  try {
+    result = await doValidateField(modelProps)
+    // When result is false meaning that the fields are not validatable
+    if (result === true) {
+      await callback?.(result)
+    }
+    return result
+  } catch (e) {
+    if (e instanceof Error) throw e
+
+    const invalidFields = e as ValidateFieldsError
+
+    if (props.scrollToError) {
+      // form-item may be dynamically rendered based on the judgment conditions, and the order in invalidFields is uncertain.
+      // Therefore, the first form field with an error is determined by directly looking for the rendered element.
+      if (formRef.value) {
+        const formItem = formRef.value.querySelector(`.${ns.b()}-item.is-error`)
+        formItem?.scrollIntoView(props.scrollIntoViewOptions)
       }
     }
+    !result && (await callback?.(false, invalidFields))
+    return shouldThrow && Promise.reject(invalidFields)
+  }
+}
 
-    const resetFields = () => {
-      if (!props.model) {
-        debugWarn('Form', 'model is required for resetFields to work.')
-        return
-      }
-      fields.forEach((field) => {
-        field.resetField()
-      })
-    }
+const scrollToField = (prop: FormItemProp) => {
+  const field = getField(prop)
+  if (field) {
+    field.$el?.scrollIntoView(props.scrollIntoViewOptions)
+  }
+}
 
-    const clearValidate = (props: string | string[] = []) => {
-      const fds = props.length
-        ? typeof props === 'string'
-          ? fields.filter((field) => props === field.prop)
-          : fields.filter((field) => props.indexOf(field.prop) > -1)
-        : fields
-      fds.forEach((field) => {
-        field.clearValidate()
-      })
-    }
-
-    const validate = (callback?: Callback) => {
-      if (!props.model) {
-        debugWarn('Form', 'model is required for validate to work!')
-        return
-      }
-
-      let promise: Promise<boolean> | undefined
-      // if no callback, return promise
-      if (typeof callback !== 'function') {
-        promise = new Promise((resolve, reject) => {
-          callback = function (valid, invalidFields) {
-            if (valid) {
-              resolve(true)
-            } else {
-              reject(invalidFields)
-            }
-          }
-        })
-      }
-
-      if (fields.length === 0) {
-        callback(true)
-      }
-      let valid = true
-      let count = 0
-      let invalidFields = {}
-      let firstInvalidFields
-      for (const field of fields) {
-        field.validate('', (message, field) => {
-          if (message) {
-            valid = false
-            firstInvalidFields || (firstInvalidFields = field)
-          }
-          invalidFields = { ...invalidFields, ...field }
-          if (++count === fields.length) {
-            callback(valid, invalidFields)
-          }
-        })
-      }
-      if (!valid && props.scrollToError) {
-        scrollToField(Object.keys(firstInvalidFields)[0])
-      }
-      return promise
-    }
-
-    const validateField = (
-      props: string | string[],
-      cb: ValidateFieldCallback
-    ) => {
-      props = [].concat(props)
-      const fds = fields.filter((field) => props.indexOf(field.prop) !== -1)
-      if (!fields.length) {
-        debugWarn('Form', 'please pass correct props!')
-        return
-      }
-
-      fds.forEach((field) => {
-        field.validate('', cb)
-      })
-    }
-
-    const scrollToField = (prop: string) => {
-      fields.forEach((item) => {
-        if (item.prop === prop) {
-          item.$el.scrollIntoView()
-        }
-      })
-    }
-
-    const elForm = reactive({
-      ...toRefs(props),
-      resetFields,
-      clearValidate,
-      validateField,
-      emit,
-      addField,
-      removeField,
-      ...useFormLabelWidth(),
-    })
-
-    provide(elFormKey, elForm)
-
-    return {
-      formKls,
-      validate, // export
-      resetFields,
-      clearValidate,
-      validateField,
-      scrollToField,
+watch(
+  () => props.rules,
+  () => {
+    if (props.validateOnRuleChange) {
+      validate().catch(NOOP)
     }
   },
+  { deep: true, flush: 'post' }
+)
+
+provide(
+  formContextKey,
+  reactive({
+    ...toRefs(props),
+    emit,
+
+    resetFields,
+    clearValidate,
+    validateField,
+    getField,
+    addField,
+    removeField,
+    setInitialValues,
+
+    ...useFormLabelWidth(),
+  })
+)
+
+defineExpose({
+  /**
+   * @description Validate the whole form. Receives a callback or returns `Promise`.
+   */
+  validate,
+  /**
+   * @description Validate specified fields.
+   */
+  validateField,
+  /**
+   * @description Reset specified fields and remove validation result.
+   */
+  resetFields,
+  /**
+   * @description Clear validation message for specified fields.
+   */
+  clearValidate,
+  /**
+   * @description Scroll to the specified fields.
+   */
+  scrollToField,
+  /**
+   * @description Get a field context.
+   */
+  getField,
+  /**
+   * @description All fields context.
+   */
+  fields,
+  /**
+   * @description Set initial values for form fields. When `resetFields` is called, fields will reset to these values.
+   */
+  setInitialValues,
 })
 </script>

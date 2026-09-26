@@ -1,131 +1,85 @@
 <template>
-  <div
-    :class="[
-      ns.b('item'),
-      ns.is('active', isActive),
-      ns.is('disabled', disabled),
-    ]"
-  >
+  <div :class="rootKls">
     <div
-      role="tab"
+      :id="scopedHeadId"
+      :class="headKls"
       :aria-expanded="isActive"
-      :aria-controls="ns.b(`content-${id}`)"
-      :aria-describedby="ns.b(`content-${id}`)"
+      :aria-controls="scopedContentId"
+      :aria-describedby="scopedContentId"
+      :tabindex="disabled ? undefined : 0"
+      :aria-disabled="disabled"
+      role="button"
+      @click="handleHeaderClick"
+      @keydown.space.enter.stop="handleEnterClick"
+      @focus="handleFocus"
+      @blur="focusing = false"
     >
-      <div
-        :id="ns.b(`head-${id}`)"
-        :class="[
-          ns.be('item', 'header'),
-          ns.is('active', isActive),
-          { focusing },
-        ]"
-        role="button"
-        :tabindex="disabled ? -1 : 0"
-        @click="handleHeaderClick"
-        @keyup.space.enter.stop="handleEnterClick"
-        @focus="handleFocus"
-        @blur="focusing = false"
-      >
-        <slot name="title">{{ title }}</slot>
-        <el-icon :class="[ns.be('item', 'arrow'), ns.is('active', isActive)]">
-          <arrow-right />
+      <span :class="itemTitleKls">
+        <slot name="title" :is-active="isActive">{{ title }}</slot>
+      </span>
+      <slot name="icon" :is-active="isActive">
+        <el-icon :class="arrowKls">
+          <component :is="icon" />
         </el-icon>
-      </div>
+      </slot>
     </div>
+
     <el-collapse-transition>
       <div
         v-show="isActive"
-        :id="ns.b(`content-${id}`)"
-        :class="ns.be('item', 'wrap')"
-        role="tabpanel"
+        :id="scopedContentId"
+        role="region"
+        :class="itemWrapperKls"
         :aria-hidden="!isActive"
-        :aria-labelledby="ns.b(`head-${id}`)"
+        :aria-labelledby="scopedHeadId"
       >
-        <div :class="ns.be('item', 'content')">
-          <slot></slot>
+        <div :class="itemContentKls">
+          <slot />
         </div>
       </div>
     </el-collapse-transition>
   </div>
 </template>
-<script lang="ts">
-import { defineComponent, inject, computed, ref } from 'vue'
-import { generateId } from '@element-plus/utils-v2'
+
+<script lang="ts" setup>
+import { markRaw } from 'vue'
 import ElCollapseTransition from '@element-plus/components/collapse-transition'
 import ElIcon from '@element-plus/components/icon'
 import { ArrowRight } from '@element-plus/icons-vue'
-import { useNamespace } from '@element-plus/hooks'
+import { useCollapseItem, useCollapseItemDOM } from './use-collapse-item'
 
-import type { PropType } from 'vue'
-import type { CollapseProvider } from './collapse.type'
+import type { CollapseItemProps } from './collapse-item'
 
-export default defineComponent({
+defineOptions({
   name: 'ElCollapseItem',
-  components: { ElCollapseTransition, ElIcon, ArrowRight },
-  props: {
-    title: {
-      type: String,
-      default: '',
-    },
-    name: {
-      type: [String, Number] as PropType<string | number>,
-      default: () => {
-        return generateId()
-      },
-    },
-    disabled: Boolean,
-  },
-  setup(props) {
-    const collapse = inject<CollapseProvider>('collapse')
-    const ns = useNamespace('collapse')
+})
 
-    const contentWrapStyle = ref({
-      height: 'auto',
-      display: 'block',
-    })
-    const contentHeight = ref(0)
-    const focusing = ref(false)
-    const isClick = ref(false)
-    const id = ref(generateId())
+const props = withDefaults(defineProps<CollapseItemProps>(), {
+  title: '',
+  icon: markRaw(ArrowRight),
+})
+const {
+  focusing,
+  id,
+  isActive,
+  handleFocus,
+  handleHeaderClick,
+  handleEnterClick,
+} = useCollapseItem(props)
 
-    const isActive = computed(() => {
-      return collapse?.activeNames.value.indexOf(props.name) > -1
-    })
+const {
+  arrowKls,
+  headKls,
+  rootKls,
+  itemTitleKls,
+  itemWrapperKls,
+  itemContentKls,
+  scopedContentId,
+  scopedHeadId,
+} = useCollapseItemDOM(props, { focusing, isActive, id })
 
-    const handleFocus = () => {
-      setTimeout(() => {
-        if (!isClick.value) {
-          focusing.value = true
-        } else {
-          isClick.value = false
-        }
-      }, 50)
-    }
-
-    const handleHeaderClick = () => {
-      if (props.disabled) return
-      collapse?.handleItemClick(props.name)
-      focusing.value = false
-      isClick.value = true
-    }
-
-    const handleEnterClick = () => {
-      collapse?.handleItemClick(props.name)
-    }
-
-    return {
-      isActive,
-      contentWrapStyle,
-      contentHeight,
-      focusing,
-      isClick,
-      id,
-      ns,
-      handleFocus,
-      handleHeaderClick,
-      handleEnterClick,
-      collapse,
-    }
-  },
+defineExpose({
+  /** @description current collapse-item whether active */
+  isActive,
 })
 </script>

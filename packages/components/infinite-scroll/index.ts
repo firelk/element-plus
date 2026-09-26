@@ -1,7 +1,8 @@
-import InfiniteScroll from './src/index'
+// TODO: remove the directive in 3.0
+import InfiniteScroll from './src'
 
 import type { App } from 'vue'
-import type { SFCWithInstall } from '@element-plus/utils-v2'
+import type { SFCWithInstall } from '@element-plus/utils'
 
 const _InfiniteScroll = InfiniteScroll as SFCWithInstall<typeof InfiniteScroll>
 

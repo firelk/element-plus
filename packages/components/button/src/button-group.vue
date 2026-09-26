@@ -1,30 +1,29 @@
 <template>
-  <div :class="`${ns.b('group')}`">
-    <slot></slot>
+  <div :class="[ns.b('group'), ns.bm('group', props.direction)]">
+    <slot />
   </div>
 </template>
-<script lang="ts">
-import { defineComponent, provide, reactive, toRef } from 'vue'
-import { buttonGroupContextKey } from '@element-plus/tokens'
+
+<script lang="ts" setup>
+import { provide, reactive, toRef } from 'vue'
 import { useNamespace } from '@element-plus/hooks'
-import { buttonGroupProps } from './button-group'
+import { buttonGroupContextKey } from './constants'
 
-export default defineComponent({
+import type { ButtonGroupProps } from './button-group'
+
+defineOptions({
   name: 'ElButtonGroup',
-  props: buttonGroupProps,
-
-  setup(props) {
-    provide(
-      buttonGroupContextKey,
-      reactive({
-        size: toRef(props, 'size'),
-        type: toRef(props, 'type'),
-      })
-    )
-    const ns = useNamespace('button')
-    return {
-      ns,
-    }
-  },
 })
+const props = withDefaults(defineProps<ButtonGroupProps>(), {
+  direction: 'horizontal',
+  type: '',
+})
+provide(
+  buttonGroupContextKey,
+  reactive({
+    size: toRef(props, 'size'),
+    type: toRef(props, 'type'),
+  })
+)
+const ns = useNamespace('button')
 </script>

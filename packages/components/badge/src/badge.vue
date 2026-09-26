@@ -1,48 +1,72 @@
 <template>
   <div :class="ns.b()">
-    <slot></slot>
+    <slot />
     <transition :name="`${ns.namespace.value}-zoom-in-center`">
       <sup
-        v-show="!hidden && (content || content === '0' || isDot)"
+        v-if="!hidden && (content || isDot || $slots.content)"
         :class="[
           ns.e('content'),
           ns.em('content', type),
           ns.is('fixed', !!$slots.default),
           ns.is('dot', isDot),
+          ns.is('hide-zero', !showZero && value === 0),
+          badgeClass,
         ]"
-        v-text="content"
+        :style="style"
       >
+        <slot name="content" :value="content">
+          {{ content }}
+        </slot>
       </sup>
     </transition>
   </div>
 </template>
 
-<script lang="ts">
-import { computed, defineComponent } from 'vue'
+<script lang="ts" setup>
+import { computed } from 'vue'
 import { useNamespace } from '@element-plus/hooks'
-import { badgeProps } from './badge'
+import { addUnit, isNumber } from '@element-plus/utils'
 
-export default defineComponent({
+import type { StyleValue } from 'vue'
+import type { BadgeProps } from './badge'
+
+defineOptions({
   name: 'ElBadge',
+})
 
-  props: badgeProps,
+const props = withDefaults(defineProps<BadgeProps>(), {
+  badgeClass: undefined,
+  badgeStyle: undefined,
+  value: '',
+  max: 99,
+  type: 'danger',
+  showZero: true,
+  offset: () => [0, 0],
+})
 
-  setup(props) {
-    const ns = useNamespace('badge')
+const ns = useNamespace('badge')
 
-    const content = computed<string>(() => {
-      if (props.isDot) return ''
+const content = computed<string>(() => {
+  if (props.isDot) return ''
+  if (isNumber(props.value) && isNumber(props.max)) {
+    return props.max < props.value ? `${props.max}+` : `${props.value}`
+  }
+  return `${props.value}`
+})
 
-      if (typeof props.value === 'number' && typeof props.max === 'number') {
-        return props.max < props.value ? `${props.max}+` : `${props.value}`
-      }
-      return `${props.value}`
-    })
+const style = computed<StyleValue>(() => {
+  return [
+    {
+      backgroundColor: props.color,
+      marginRight: addUnit(-props.offset[0]),
+      marginTop: addUnit(props.offset[1]),
+    },
+    props.badgeStyle ?? {},
+  ]
+})
 
-    return {
-      ns,
-      content,
-    }
-  },
+defineExpose({
+  /** @description badge content */
+  content,
 })
 </script>

@@ -1,28 +1,32 @@
 <script lang="ts" setup>
-import { ref } from 'vue'
 import { useRoute } from 'vitepress'
+import { useStorage } from '@vueuse/core'
 import VPLink from '../common/vp-link.vue'
-import { isActiveLink } from '../../utils'
+import { isActive } from '../../utils'
+import { usePlaygroundPreview } from '../../composables/use-playground'
 
 import type { Link } from '../../types'
+
 const USER_VISITED_NEW_RESOURCE_PAGE = 'USER_VISITED_NEW_RESOURCE_PAGE'
-defineProps<{
+
+const props = defineProps<{
   item: Link
 }>()
 
 const route = useRoute()
-const isVisited = ref(
-  !!window.localStorage.getItem(USER_VISITED_NEW_RESOURCE_PAGE)
+
+const isVisited = useStorage<boolean | string>(
+  USER_VISITED_NEW_RESOURCE_PAGE,
+  false
 )
+
+const targetLink = usePlaygroundPreview(props)
+
 const isNewPage = (item: Link) => item.activeMatch === '/some_fake_path/'
 
 const onNavClick = (item: Link) => {
   if (isNewPage(item) && !isVisited.value) {
-    window.localStorage.setItem(
-      USER_VISITED_NEW_RESOURCE_PAGE,
-      Date.now().toString()
-    )
-    isVisited.value = true
+    isVisited.value = Date.now().toString()
   }
 }
 </script>
@@ -31,13 +35,13 @@ const onNavClick = (item: Link) => {
   <VPLink
     :class="{
       'is-menu-link': true,
-      active: isActiveLink(
-        route,
+      active: isActive(
+        route.data.relativePath,
         item.activeMatch || item.link,
         !!item.activeMatch
       ),
     }"
-    :href="item.link"
+    :href="targetLink"
     :no-icon="true"
     @click="onNavClick(item)"
   >

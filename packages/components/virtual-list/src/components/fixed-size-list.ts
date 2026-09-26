@@ -1,12 +1,12 @@
-import { isString, throwError } from '@element-plus/utils-v2'
+import { isString, throwError } from '@element-plus/utils'
 import buildList from '../builders/build-list'
 import { isHorizontal } from '../utils'
 import {
-  SMART_ALIGNMENT,
   AUTO_ALIGNMENT,
-  START_ALIGNMENT,
-  END_ALIGNMENT,
   CENTERED_ALIGNMENT,
+  END_ALIGNMENT,
+  SMART_ALIGNMENT,
+  START_ALIGNMENT,
 } from '../defaults'
 
 import type { VirtualizedListProps } from '../props'
@@ -120,9 +120,8 @@ const FixedSizeList = buildList({
 
   clearCache: true,
 
-  validateProps() {
-    //
-  },
+  validateProps() {},
 })
 
+export type FixedSizeListInstance = InstanceType<typeof FixedSizeList> & unknown
 export default FixedSizeList

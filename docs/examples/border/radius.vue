@@ -8,7 +8,14 @@
     >
       <div class="title">{{ radius.name }}</div>
       <div class="value">
-        <code>border-radius: {{ getValue(radius.type) || '0px' }}</code>
+        <code>
+          border-radius:
+          {{
+            radius.type
+              ? useCssVar(`--el-border-radius-${radius.type}`)
+              : '"0px"'
+          }}
+        </code>
       </div>
       <div
         class="radius"
@@ -17,13 +24,14 @@
             ? `var(--el-border-radius-${radius.type})`
             : '',
         }"
-      ></div>
+      />
     </el-col>
   </el-row>
 </template>
 
 <script lang="ts" setup>
 import { ref } from 'vue'
+import { useCssVar } from '@vueuse/core'
 
 const radiusGroup = ref([
   {
@@ -43,15 +51,8 @@ const radiusGroup = ref([
     type: 'round',
   },
 ])
-
-const getValue = (type: string) => {
-  const getCssVarValue = (prefix, type) =>
-    getComputedStyle(document.documentElement).getPropertyValue(
-      `--el-${prefix}-${type}`
-    )
-  return getCssVarValue('border-radius', type)
-}
 </script>
+
 <style scoped>
 .demo-radius .title {
   color: var(--el-text-color-regular);
@@ -66,7 +67,7 @@ const getValue = (type: string) => {
 .demo-radius .radius {
   height: 40px;
   width: 70%;
-  border: 1px solid var(--el-border-color-base);
+  border: 1px solid var(--el-border-color);
   border-radius: 0;
   margin-top: 20px;
 }

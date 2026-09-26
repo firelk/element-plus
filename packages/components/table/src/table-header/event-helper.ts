@@ -1,11 +1,23 @@
-import { getCurrentInstance, ref, inject } from 'vue'
-import { isClient } from '@vueuse/core'
-import { hasClass, addClass, removeClass } from '@element-plus/utils/dom'
+import { getCurrentInstance, inject, ref } from 'vue'
+import { isNull } from 'lodash-unified'
+import {
+  addClass,
+  hasClass,
+  isClient,
+  isElement,
+  removeClass,
+} from '@element-plus/utils'
 import { TABLE_INJECTION_KEY } from '../tokens'
+
+import type { EmitFn } from '@element-plus/utils'
 import type { TableHeaderProps } from '.'
 import type { TableColumnCtx } from '../table-column/defaults'
+import type { DefaultRow, TableSortOrder } from '../table/defaults'
 
-function useEvent<T>(props: TableHeaderProps<T>, emit) {
+function useEvent<T extends DefaultRow>(
+  props: TableHeaderProps<T>,
+  emit: EmitFn<string[]>
+) {
   const instance = getCurrentInstance()
   const parent = inject(TABLE_INJECTION_KEY)
   const handleFilterClick = (event: Event) => {
@@ -13,7 +25,10 @@ function useEvent<T>(props: TableHeaderProps<T>, emit) {
     return
   }
 
-  const handleHeaderClick = (event: Event, column: TableColumnCtx<T>) => {
+  const handleHeaderClick = (
+    event: PointerEvent,
+    column: TableColumnCtx<T>
+  ) => {
     if (!column.filters && column.sortable) {
       handleSortClick(event, column, false)
     } else if (column.filterable && !column.sortable) {
@@ -22,24 +37,36 @@ function useEvent<T>(props: TableHeaderProps<T>, emit) {
     parent?.emit('header-click', column, event)
   }
 
-  const handleHeaderContextMenu = (event: Event, column: TableColumnCtx<T>) => {
+  const handleHeaderContextMenu = (
+    event: PointerEvent,
+    column: TableColumnCtx<T>
+  ) => {
     parent?.emit('header-contextmenu', column, event)
   }
-  const draggingColumn = ref(null)
+  const draggingColumn = ref<TableColumnCtx<T> | null>(null)
   const dragging = ref(false)
-  const dragState = ref({})
+  const dragState = ref<{
+    startMouseLeft: number
+    startLeft: number
+    startColumnLeft: number
+    tableLeft: number
+  }>()
   const handleMouseDown = (event: MouseEvent, column: TableColumnCtx<T>) => {
     if (!isClient) return
     if (column.children && column.children.length > 0) return
     /* istanbul ignore if */
-    if (draggingColumn.value && props.border) {
+    if (
+      draggingColumn.value &&
+      props.border &&
+      draggingColumn.value.id === column.id
+    ) {
       dragging.value = true
 
       const table = parent
       emit('set-drag-visible', true)
       const tableEl = table?.vnode.el
-      const tableLeft = tableEl.getBoundingClientRect().left
-      const columnEl = instance.vnode.el.querySelector(`th.${column.id}`)
+      const tableLeft = tableEl?.getBoundingClientRect().left
+      const columnEl = instance?.vnode?.el?.querySelector(`th.${column.id}`)
       const columnRect = columnEl.getBoundingClientRect()
       const minLeft = columnRect.left - tableLeft + 30
 
@@ -72,7 +99,7 @@ function useEvent<T>(props: TableHeaderProps<T>, emit) {
       const handleMouseUp = () => {
         if (dragging.value) {
           const { startColumnLeft, startLeft } = dragState.value as any
-          const finalLeft = parseInt(resizeProxy.style.left, 10)
+          const finalLeft = Number.parseInt(resizeProxy.style.left, 10)
           const columnWidth = finalLeft - startColumnLeft
           column.width = column.realWidth = columnWidth
           table?.emit(
@@ -88,7 +115,7 @@ function useEvent<T>(props: TableHeaderProps<T>, emit) {
           document.body.style.cursor = ''
           dragging.value = false
           draggingColumn.value = null
-          dragState.value = {}
+          dragState.value = undefined
           emit('set-drag-visible', false)
         }
 
@@ -97,7 +124,7 @@ function useEvent<T>(props: TableHeaderProps<T>, emit) {
         document.onselectstart = null
         document.ondragstart = null
 
-        setTimeout(function () {
+        setTimeout(() => {
           removeClass(columnEl, 'noclick')
         }, 0)
       }
@@ -108,58 +135,65 @@ function useEvent<T>(props: TableHeaderProps<T>, emit) {
   }
 
   const handleMouseMove = (event: MouseEvent, column: TableColumnCtx<T>) => {
-    if (column.children && column.children.length > 0) return
-    let target = event.target as HTMLElement
-    while (target && target.tagName !== 'TH') {
-      target = target.parentNode as HTMLElement
+    if (!props.border || (column.children && column.children.length > 0)) return
+    const el = event.target as HTMLElement
+    const target = isElement(el) ? el.closest('th') : null
+    if (!target) {
+      return
     }
 
-    if (!column || !column.resizable) return
+    const isSortable = hasClass(target, 'is-sortable')
 
-    if (!dragging.value && props.border) {
-      const rect = target.getBoundingClientRect()
+    if (isSortable) {
+      const cursor = dragging.value ? 'col-resize' : ''
+      target.style.cursor = cursor
 
-      const bodyStyle = document.body.style
-      if (rect.width > 12 && rect.right - event.pageX < 8) {
-        bodyStyle.cursor = 'col-resize'
-        if (hasClass(target, 'is-sortable')) {
-          target.style.cursor = 'col-resize'
-        }
-        draggingColumn.value = column
-      } else if (!dragging.value) {
-        bodyStyle.cursor = ''
-        if (hasClass(target, 'is-sortable')) {
-          target.style.cursor = 'pointer'
-        }
-        draggingColumn.value = null
+      const caret = target.querySelector<HTMLElement>('.caret-wrapper')
+      if (caret) {
+        caret.style.cursor = cursor
       }
+    }
+
+    if (!column.resizable || dragging.value) {
+      draggingColumn.value = null
+      return
+    }
+
+    const rect = target.getBoundingClientRect()
+    const isLastTh = target.parentNode?.lastElementChild === target
+    const allowDrag = props.allowDragLastColumn || !isLastTh
+    const isResizeHandleActive =
+      rect.width > 12 && rect.right - event.clientX < 8 && allowDrag
+    const cursor = isResizeHandleActive ? 'col-resize' : ''
+
+    document.body.style.cursor = cursor
+    draggingColumn.value = isResizeHandleActive ? (column as any) : null
+    if (isSortable) {
+      target.style.cursor = cursor
     }
   }
 
   const handleMouseOut = () => {
-    if (!isClient) return
+    if (!isClient || dragging.value) return
     document.body.style.cursor = ''
   }
-  const toggleOrder = ({ order, sortOrders }) => {
-    if (order === '') return sortOrders[0]
+  const toggleOrder = ({ order, sortOrders }: TableColumnCtx<T>) => {
+    if ((order as string) === '') return sortOrders[0]
     const index = sortOrders.indexOf(order || null)
     return sortOrders[index > sortOrders.length - 2 ? 0 : index + 1]
   }
   const handleSortClick = (
     event: Event,
     column: TableColumnCtx<T>,
-    givenOrder: string | boolean
+    givenOrder?: TableSortOrder | boolean
   ) => {
     event.stopPropagation()
-    const order =
+    const order = (
       column.order === givenOrder ? null : givenOrder || toggleOrder(column)
+    ) as TableSortOrder | null
+    const target = (event.target as HTMLElement)?.closest('th')
 
-    let target = event.target as HTMLElement
-    while (target && target.tagName !== 'TH') {
-      target = target.parentNode as HTMLElement
-    }
-
-    if (target && target.tagName === 'TH') {
+    if (target) {
       if (hasClass(target, 'noclick')) {
         removeClass(target, 'noclick')
         return
@@ -168,6 +202,18 @@ function useEvent<T>(props: TableHeaderProps<T>, emit) {
 
     if (!column.sortable) return
 
+    const clickTarget = event.currentTarget
+
+    if (
+      ['ascending', 'descending'].some(
+        (str) =>
+          hasClass(clickTarget as Element, str) &&
+          !column.sortOrders.includes(str as TableSortOrder)
+      )
+    ) {
+      return
+    }
+
     const states = props.store.states
     let sortProp = states.sortProp.value
     let sortOrder
@@ -175,13 +221,13 @@ function useEvent<T>(props: TableHeaderProps<T>, emit) {
 
     if (
       sortingColumn !== column ||
-      (sortingColumn === column && sortingColumn.order === null)
+      (sortingColumn === column && isNull(sortingColumn.order))
     ) {
       if (sortingColumn) {
         sortingColumn.order = null
       }
       states.sortingColumn.value = column
-      sortProp = column.property
+      sortProp = column.property ?? null
     }
     if (!order) {
       sortOrder = column.order = null

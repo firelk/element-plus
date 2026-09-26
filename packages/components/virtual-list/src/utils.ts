@@ -1,18 +1,16 @@
-import { isObject } from '@vue/shared'
 import {
-  FORWARD,
   BACKWARD,
+  FORWARD,
+  HORIZONTAL,
   LTR,
   RTL,
-  HORIZONTAL,
   RTL_OFFSET_NAG,
-  RTL_OFFSET_POS_DESC,
   RTL_OFFSET_POS_ASC,
-  PageKey,
+  RTL_OFFSET_POS_DESC,
 } from './defaults'
 
 import type { CSSProperties } from 'vue'
-import type { RTLOffsetType, Direction, LayoutDirection } from './types'
+import type { Direction, RTLOffsetType } from './types'
 
 export const getScrollDir = (prev: number, cur: number) =>
   prev < cur ? FORWARD : BACKWARD
@@ -61,22 +59,24 @@ export function getRTLOffsetType(recalculate = false): RTLOffsetType {
   return cachedRTLResult
 }
 
-export const getRelativePos = (
-  e: TouchEvent | MouseEvent,
-  layout: LayoutDirection
-) => {
-  return 'touches' in e ? e.touches[0][PageKey[layout]] : e[PageKey[layout]]
+type RenderThumbStyleParams = {
+  bar: {
+    size: 'height' | 'width'
+    axis: 'X' | 'Y'
+  }
+  size: string
+  move: number
 }
 
-export function renderThumbStyle({ move, size, bar }, layout: string) {
+export function renderThumbStyle(
+  { move, size, bar }: RenderThumbStyleParams,
+  layout: string
+) {
   const style: CSSProperties = {}
   const translate = `translate${bar.axis}(${move}px)`
 
   style[bar.size] = size
   style.transform = translate
-  style.msTransform = translate
-  // polyfill
-  ;(style as any).webkitTransform = translate
 
   if (layout === 'horizontal') {
     style.height = '100%'
@@ -86,8 +86,3 @@ export function renderThumbStyle({ move, size, bar }, layout: string) {
 
   return style
 }
-
-export const isFF =
-  typeof navigator !== 'undefined' &&
-  isObject(navigator) &&
-  /Firefox/i.test(navigator.userAgent)

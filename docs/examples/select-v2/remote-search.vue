@@ -1,16 +1,37 @@
 <template>
-  <el-select-v2
-    v-model="value"
-    style="width: 240px"
-    multiple
-    filterable
-    remote
-    :remote-method="remoteMethod"
-    clearable
-    :options="options"
-    :loading="loading"
-    placeholder="Please enter a keyword"
-  />
+  <div class="flex flex-wrap">
+    <div class="m-4">
+      <p>default</p>
+      <el-select-v2
+        v-model="value"
+        style="width: 240px"
+        multiple
+        filterable
+        remote
+        :remote-method="remoteMethod"
+        clearable
+        :options="options"
+        :loading="loading"
+        placeholder="Please enter a keyword"
+      />
+    </div>
+    <div class="m-4">
+      <p>use remote-show-suffix</p>
+      <el-select-v2
+        v-model="value"
+        style="width: 240px"
+        multiple
+        filterable
+        remote
+        :remote-method="remoteMethod"
+        remote-show-suffix
+        clearable
+        :options="options"
+        :loading="loading"
+        placeholder="Please enter a keyword"
+      />
+    </div>
+  </div>
 </template>
 
 <script lang="ts" setup>
@@ -87,7 +108,7 @@ const remoteMethod = (query: string) => {
     setTimeout(() => {
       loading.value = false
       options.value = list.filter((item) => {
-        return item.label.toLowerCase().indexOf(query.toLowerCase()) > -1
+        return item.label.toLowerCase().includes(query.toLowerCase())
       })
     }, 200)
   } else {

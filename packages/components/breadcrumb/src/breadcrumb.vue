@@ -2,41 +2,38 @@
   <div
     ref="breadcrumb"
     :class="ns.b()"
-    aria-label="Breadcrumb"
+    :aria-label="t('el.breadcrumb.label')"
     role="navigation"
   >
-    <slot></slot>
+    <slot />
   </div>
 </template>
 
-<script lang="ts">
-import { defineComponent, provide, ref, onMounted } from 'vue'
-import { elBreadcrumbKey } from '@element-plus/tokens'
+<script lang="ts" setup>
+import { onMounted, provide, ref } from 'vue'
+import { useLocale, useNamespace } from '@element-plus/hooks'
+import { breadcrumbKey } from './constants'
 
-import { useNamespace } from '@element-plus/hooks'
-import { breadcrumbProps } from './breadcrumb'
+import type { BreadcrumbProps } from './breadcrumb'
 
-export default defineComponent({
+defineOptions({
   name: 'ElBreadcrumb',
-  props: breadcrumbProps,
+})
 
-  setup(props) {
-    const ns = useNamespace('breadcrumb')
-    const breadcrumb = ref<HTMLDivElement>()
+const { t } = useLocale()
+const props = withDefaults(defineProps<BreadcrumbProps>(), {
+  separator: '/',
+})
 
-    provide(elBreadcrumbKey, props)
+const ns = useNamespace('breadcrumb')
+const breadcrumb = ref<HTMLDivElement>()
 
-    onMounted(() => {
-      const items = breadcrumb.value!.querySelectorAll(`.${ns.e('item')}`)
-      if (items.length) {
-        items[items.length - 1].setAttribute('aria-current', 'page')
-      }
-    })
+provide(breadcrumbKey, props)
 
-    return {
-      ns,
-      breadcrumb,
-    }
-  },
+onMounted(() => {
+  const items = breadcrumb.value!.querySelectorAll(`.${ns.e('item')}`)
+  if (items.length) {
+    items[items.length - 1].setAttribute('aria-current', 'page')
+  }
 })
 </script>

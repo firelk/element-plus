@@ -1,9 +1,8 @@
 import fs from 'fs'
 import path from 'path'
-import chalk from 'chalk'
-
-import { docRoot } from '../utils/paths'
-import { errorAndExit } from '../../../build/utils/log'
+import { styleText } from 'util'
+import consola from 'consola'
+import { docRoot, errorAndExit } from '@element-plus/build-utils'
 
 // NB: this file is only for generating files that enables developers to develop the website.
 const componentLocaleRoot = path.resolve(docRoot, '.vitepress/crowdin')
@@ -16,7 +15,7 @@ async function main() {
     throw new Error(exists)
   }
 
-  console.log(chalk.cyan('Starting for build doc for developing'))
+  consola.trace(styleText('cyan', 'Starting for build doc for developing'))
   // all language should be identical since it is mirrored from crowdin.
   const dirs = await fs.promises.readdir(componentLocaleRoot, {
     withFileTypes: true,
@@ -44,7 +43,7 @@ async function main() {
     }
   })
 
-  console.log(languagePaths)
+  consola.debug(languagePaths)
   await traverseDir(enUS, languagePaths, localeOutput)
 }
 
@@ -73,7 +72,6 @@ async function traverseDir(
           path.resolve(targetPath, c.name)
         )
       } else if (c.isFile()) {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
         const content = require(path.resolve(dir, c.name))
 
         const contentToWrite = {
@@ -82,7 +80,6 @@ async function traverseDir(
 
         await Promise.all(
           paths.map(async (p) => {
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
             const content = require(path.resolve(p.pathname, c.name))
 
             contentToWrite[p.name] = content
@@ -103,7 +100,9 @@ async function traverseDir(
 
 main()
   .then(() => {
-    console.log(chalk.green('Locale for website development generated'))
+    consola.success(
+      styleText('green', 'Locale for website development generated')
+    )
   })
   .catch((err) => {
     if (err.message === exists) {

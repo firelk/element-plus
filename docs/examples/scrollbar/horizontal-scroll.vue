@@ -11,6 +11,7 @@
 <style scoped>
 .scrollbar-flex-content {
   display: flex;
+  width: fit-content;
 }
 .scrollbar-demo-item {
   flex-shrink: 0;
@@ -22,7 +23,7 @@
   margin: 10px;
   text-align: center;
   border-radius: 4px;
-  background: var(--el-color-danger-lighter);
+  background: var(--el-color-danger-light-9);
   color: var(--el-color-danger);
 }
 </style>

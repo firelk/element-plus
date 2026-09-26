@@ -1,21 +1,30 @@
 import {
-  h,
-  ref,
-  provide,
   computed,
   defineComponent,
   getCurrentInstance,
+  h,
+  provide,
+  ref,
   watch,
 } from 'vue'
-import { useLocale } from '@element-plus/hooks'
+import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import {
-  debugWarn,
   buildProps,
+  debugWarn,
   definePropType,
+  iconPropType,
+  isNumber,
   mutable,
-} from '@element-plus/utils-v2'
-import { elPaginationKey } from '@element-plus/tokens'
-
+} from '@element-plus/utils'
+import {
+  useDeprecated,
+  useGlobalSize,
+  useLocale,
+  useNamespace,
+  useSizeProp,
+} from '@element-plus/hooks'
+import { CHANGE_EVENT } from '@element-plus/constants'
+import { elPaginationKey } from './constants'
 import Prev from './components/prev.vue'
 import Next from './components/next.vue'
 import Sizes from './components/sizes.vue'
@@ -23,8 +32,13 @@ import Jumper from './components/jumper.vue'
 import Total from './components/total.vue'
 import Pager from './components/pager.vue'
 
-import type { VNode, ExtractPropTypes } from 'vue'
-
+import type { ClassValue } from '@element-plus/utils'
+import type {
+  ExtractPropTypes,
+  ExtractPublicPropTypes,
+  StyleValue,
+  VNode,
+} from 'vue'
 /**
  * It it user's responsibility to guarantee that the value of props.total... is number
  * (same as pageSize, defaultPageSize, currentPage, defaultCurrentPage, pageCount)
@@ -33,28 +47,34 @@ import type { VNode, ExtractPropTypes } from 'vue'
 const isAbsent = (v: unknown): v is undefined => typeof v !== 'number'
 
 type LayoutKey =
-  | 'prev'
-  | 'pager'
-  | 'next'
-  | 'jumper'
-  | '->'
-  | 'total'
-  | 'sizes'
-  | 'slot'
+  'prev' | 'pager' | 'next' | 'jumper' | '->' | 'total' | 'sizes' | 'slot'
 
 export const paginationProps = buildProps({
-  total: Number,
+  /**
+   * @description options of item count per page
+   */
   pageSize: Number,
+  /**
+   * @description default initial value of page size, not setting is the same as setting 10
+   */
   defaultPageSize: Number,
-  currentPage: Number,
-  defaultCurrentPage: Number,
+  /**
+   * @description total item count
+   */
+  total: Number,
+  /**
+   * @description total page count. Set either `total` or `page-count` and pages will be displayed; if you need `page-sizes`, `total` is required
+   */
   pageCount: Number,
+  /**
+   * @description number of pagers. Pagination collapses when the total page count exceeds this value
+   */
   pagerCount: {
     type: Number,
     validator: (value: unknown) => {
       return (
-        typeof value === 'number' &&
-        (value | 0) === value &&
+        isNumber(value) &&
+        Math.trunc(value) === value &&
         value > 4 &&
         value < 22 &&
         value % 2 === 1
@@ -62,42 +82,118 @@ export const paginationProps = buildProps({
     },
     default: 7,
   },
+  /**
+   * @description current page number
+   */
+  currentPage: Number,
+  /**
+   * @description default initial value of current-page, not setting is the same as setting 1
+   */
+  defaultCurrentPage: Number,
+  /**
+   * @description layout of Pagination, elements separated with a comma
+   */
   layout: {
     type: String,
     default: (
       ['prev', 'pager', 'next', 'jumper', '->', 'total'] as LayoutKey[]
     ).join(', '),
   },
+  /**
+   * @description item count of each page
+   */
   pageSizes: {
     type: definePropType<number[]>(Array),
     default: () => mutable([10, 20, 30, 40, 50, 100] as const),
   },
+  /**
+   * @description custom class name for the page size Select's dropdown
+   */
   popperClass: {
-    type: String,
+    type: definePropType<ClassValue>([String, Array, Object, Boolean]),
     default: '',
   },
+  /**
+   * @description custom style for the page size Select's dropdown
+   */
+  popperStyle: {
+    type: definePropType<StyleValue>([String, Array, Object, Boolean]),
+    default: undefined,
+  },
+  /**
+   * @description text for the prev button
+   */
   prevText: {
     type: String,
     default: '',
   },
+  /**
+   * @description icon for the prev button, higher priority of `prev-text`
+   */
+  prevIcon: {
+    type: iconPropType,
+    default: () => ArrowLeft,
+  },
+  /**
+   * @description text for the next button
+   */
   nextText: {
     type: String,
     default: '',
   },
+  /**
+   * @description icon for the next button, higher priority of `next-text`
+   */
+  nextIcon: {
+    type: iconPropType,
+    default: () => ArrowRight,
+  },
+  /**
+   * @description whether Pagination size is teleported to body
+   */
+  teleported: {
+    type: Boolean,
+    default: true,
+  },
+  /**
+   * @description whether to use small pagination
+   */
   small: Boolean,
+  /**
+   * @description set page size
+   */
+  size: useSizeProp,
+  /**
+   * @description whether the buttons have a background color
+   */
   background: Boolean,
+  /**
+   * @description whether Pagination is disabled
+   */
   disabled: Boolean,
+  /**
+   * @description whether to hide when there's only one page
+   */
   hideOnSinglePage: Boolean,
+  /**
+   * @description which element the size dropdown appends to.
+   */
+  appendSizeTo: String,
 } as const)
 export type PaginationProps = ExtractPropTypes<typeof paginationProps>
+export type PaginationPropsPublic = ExtractPublicPropTypes<
+  typeof paginationProps
+>
 
 export const paginationEmits = {
-  'update:current-page': (val: number) => typeof val === 'number',
-  'update:page-size': (val: number) => typeof val === 'number',
-  'size-change': (val: number) => typeof val === 'number',
-  'current-change': (val: number) => typeof val === 'number',
-  'prev-click': (val: number) => typeof val === 'number',
-  'next-click': (val: number) => typeof val === 'number',
+  'update:current-page': (val: number) => isNumber(val),
+  'update:page-size': (val: number) => isNumber(val),
+  'size-change': (val: number) => isNumber(val),
+  change: (currentPage: number, pageSize: number) =>
+    isNumber(currentPage) && isNumber(pageSize),
+  'current-change': (val: number) => isNumber(val),
+  'prev-click': (val: number) => isNumber(val),
+  'next-click': (val: number) => isNumber(val),
 }
 export type PaginationEmits = typeof paginationEmits
 
@@ -110,7 +206,22 @@ export default defineComponent({
 
   setup(props, { emit, slots }) {
     const { t } = useLocale()
+    const ns = useNamespace('pagination')
     const vnodeProps = getCurrentInstance()!.vnode.props || {}
+    const _globalSize = useGlobalSize()
+    const _size = computed(() =>
+      props.small ? 'small' : (props.size ?? _globalSize.value)
+    )
+    useDeprecated(
+      {
+        from: 'small',
+        replacement: 'size',
+        version: '3.0.0',
+        scope: 'el-pagination',
+        ref: 'https://element-plus.org/zh-CN/component/pagination.html',
+      },
+      computed(() => !!props.small)
+    )
     // we can find @xxx="xxx" props on `vnodeProps` to check if user bind corresponding events
     const hasCurrentPageListener =
       'onUpdate:currentPage' in vnodeProps ||
@@ -214,6 +325,14 @@ export default defineComponent({
       if (currentPageBridge.value > val) currentPageBridge.value = val
     })
 
+    watch(
+      [currentPageBridge, pageSizeBridge],
+      (value) => {
+        emit(CHANGE_EVENT, ...value)
+      },
+      { flush: 'post' }
+    )
+
     function handleCurrentChange(val: number) {
       currentPageBridge.value = val
     }
@@ -266,7 +385,7 @@ export default defineComponent({
       const rightWrapperChildren: Array<VNode | VNode[] | null> = []
       const rightWrapperRoot = h(
         'div',
-        { class: 'el-pagination__rightwrapper' },
+        { class: ns.e('rightwrapper') },
         rightWrapperChildren
       )
       const TEMPLATE_MAP: Record<
@@ -277,9 +396,12 @@ export default defineComponent({
           disabled: props.disabled,
           currentPage: currentPageBridge.value,
           prevText: props.prevText,
+          prevIcon: props.prevIcon,
           onClick: prev,
         }),
-        jumper: h(Jumper),
+        jumper: h(Jumper, {
+          size: _size.value,
+        }),
         pager: h(Pager, {
           currentPage: currentPageBridge.value,
           pageCount: pageCountBridge.value,
@@ -292,14 +414,18 @@ export default defineComponent({
           currentPage: currentPageBridge.value,
           pageCount: pageCountBridge.value,
           nextText: props.nextText,
+          nextIcon: props.nextIcon,
           onClick: next,
         }),
         sizes: h(Sizes, {
           pageSize: pageSizeBridge.value,
           pageSizes: props.pageSizes,
           popperClass: props.popperClass,
+          popperStyle: props.popperStyle,
           disabled: props.disabled,
-          size: props.small ? 'small' : 'default',
+          teleported: props.teleported,
+          size: _size.value,
+          appendSizeTo: props.appendSizeTo,
         }),
         slot: slots?.default?.() ?? null,
         total: h(Total, { total: isAbsent(props.total) ? 0 : props.total }),
@@ -323,28 +449,24 @@ export default defineComponent({
         }
       })
 
-      addClass(rootChildren[0], 'is-first')
-      addClass(rootChildren[rootChildren.length - 1], 'is-last')
+      addClass(rootChildren[0], ns.is('first'))
+      addClass(rootChildren[rootChildren.length - 1], ns.is('last'))
 
       if (haveRightWrapper && rightWrapperChildren.length > 0) {
-        addClass(rightWrapperChildren[0], 'is-first')
+        addClass(rightWrapperChildren[0], ns.is('first'))
         addClass(
           rightWrapperChildren[rightWrapperChildren.length - 1],
-          'is-last'
+          ns.is('last')
         )
         rootChildren.push(rightWrapperRoot)
       }
       return h(
         'div',
         {
-          role: 'pagination',
-          'aria-label': 'pagination',
           class: [
-            'el-pagination',
-            {
-              'is-background': props.background,
-              'el-pagination--small': props.small,
-            },
+            ns.b(),
+            ns.is('background', props.background),
+            ns.m(_size.value),
           ],
         },
         rootChildren

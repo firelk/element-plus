@@ -1,149 +1,180 @@
 <template>
   <div ref="root" :class="ns.b()" :style="rootStyle">
-    <div :class="{ [ns.m('fixed')]: state.fixed }" :style="affixStyle">
-      <slot></slot>
-    </div>
+    <teleport :disabled="teleportDisabled" :to="appendTo">
+      <div :class="{ [ns.m('fixed')]: fixed }" :style="affixStyle">
+        <slot />
+      </div>
+    </teleport>
   </div>
 </template>
-<script lang="ts">
+
+<script lang="ts" setup>
 import {
   computed,
-  defineComponent,
+  nextTick,
+  onActivated,
+  onDeactivated,
   onMounted,
-  reactive,
+  ref,
   shallowRef,
   watch,
+  watchEffect,
 } from 'vue'
-import { useEventListener, useResizeObserver } from '@vueuse/core'
-import { getScrollContainer } from '@element-plus/utils/dom'
+import {
+  useElementBounding,
+  useEventListener,
+  useWindowSize,
+} from '@vueuse/core'
+import { addUnit, getScrollContainer, throwError } from '@element-plus/utils'
 import { useNamespace } from '@element-plus/hooks'
-import { affixEmits, affixProps } from './affix'
+import { CHANGE_EVENT } from '@element-plus/constants'
+import { affixEmits } from './affix'
 
 import type { CSSProperties } from 'vue'
+import type { AffixProps } from './affix'
 
-export default defineComponent({
-  name: 'ElAffix',
+const COMPONENT_NAME = 'ElAffix'
+defineOptions({
+  name: COMPONENT_NAME,
+})
+const props = withDefaults(defineProps<AffixProps>(), {
+  zIndex: 100,
+  target: '',
+  offset: 0,
+  position: 'top',
+  appendTo: 'body',
+})
+const emit = defineEmits(affixEmits)
 
-  props: affixProps,
-  emits: affixEmits,
+const ns = useNamespace('affix')
 
-  setup(props, { emit }) {
-    const ns = useNamespace('affix')
+const target = shallowRef<HTMLElement>()
+const root = shallowRef<HTMLDivElement>()
+const scrollContainer = shallowRef<HTMLElement | Window>()
+const { height: windowHeight } = useWindowSize()
+const {
+  height: rootHeight,
+  width: rootWidth,
+  top: rootTop,
+  bottom: rootBottom,
+  left: rootLeft,
+  update: updateRoot,
+} = useElementBounding(root, { windowScroll: false })
+const targetRect = useElementBounding(target)
 
-    const target = shallowRef<HTMLElement>()
-    const root = shallowRef<HTMLDivElement>()
-    const scrollContainer = shallowRef<HTMLElement | Window>()
+const fixed = ref(false)
+const scrollTop = ref(0)
+const transform = ref(0)
 
-    const state = reactive({
-      fixed: false,
-      height: 0, // height of root
-      width: 0, // width of root
-      scrollTop: 0, // scrollTop of documentElement
-      clientHeight: 0, // clientHeight of documentElement
-      transform: 0,
-    })
+const teleportDisabled = computed(() => {
+  return !props.teleported || !fixed.value
+})
 
-    const rootStyle = computed<CSSProperties>(() => {
-      return {
-        height: state.fixed ? `${state.height}px` : '',
-        width: state.fixed ? `${state.width}px` : '',
-      }
-    })
+const rootStyle = computed<CSSProperties>(() => {
+  return {
+    display: 'flow-root', // https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Display/Formatting_contexts#explicitly_creating_a_bfc_using_display_flow-root
+    height: fixed.value ? `${rootHeight.value}px` : '',
+    width: fixed.value ? `${rootWidth.value}px` : '',
+  }
+})
 
-    const affixStyle = computed<CSSProperties | undefined>(() => {
-      if (!state.fixed) return
+const affixStyle = computed<CSSProperties>(() => {
+  if (!fixed.value) return {}
 
-      const offset = props.offset ? `${props.offset}px` : 0
-      const transform = state.transform
-        ? `translateY(${state.transform}px)`
-        : ''
+  const offset = addUnit(props.offset)
+  return {
+    height: `${rootHeight.value}px`,
+    width: `${rootWidth.value}px`,
+    top: props.position === 'top' ? offset : '',
+    bottom: props.position === 'bottom' ? offset : '',
+    left: props.teleported ? `${rootLeft.value}px` : '',
+    transform: transform.value ? `translateY(${transform.value}px)` : '',
+    zIndex: props.zIndex,
+  }
+})
 
-      return {
-        height: `${state.height}px`,
-        width: `${state.width}px`,
-        top: props.position === 'top' ? offset : '',
-        bottom: props.position === 'bottom' ? offset : '',
-        transform,
-        zIndex: props.zIndex,
-      }
-    })
+const update = () => {
+  if (!scrollContainer.value) return
 
-    const update = () => {
-      if (!root.value || !target.value || !scrollContainer.value) return
+  scrollTop.value =
+    scrollContainer.value instanceof Window
+      ? document.documentElement.scrollTop
+      : scrollContainer.value.scrollTop || 0
 
-      const rootRect = root.value.getBoundingClientRect()
-      const targetRect = target.value.getBoundingClientRect()
-      state.height = rootRect.height
-      state.width = rootRect.width
-      state.scrollTop =
-        scrollContainer.value instanceof Window
-          ? document.documentElement.scrollTop
-          : scrollContainer.value.scrollTop || 0
-      state.clientHeight = document.documentElement.clientHeight
+  const { position, target, offset } = props
+  const rootHeightOffset = offset + rootHeight.value
 
-      if (props.position === 'top') {
-        if (props.target) {
-          const difference = targetRect.bottom - props.offset - state.height
-          state.fixed = props.offset > rootRect.top && targetRect.bottom > 0
-          state.transform = difference < 0 ? difference : 0
-        } else {
-          state.fixed = props.offset > rootRect.top
-        }
-      } else {
-        if (props.target) {
-          const difference =
-            state.clientHeight - targetRect.top - props.offset - state.height
-          state.fixed =
-            state.clientHeight - props.offset < rootRect.bottom &&
-            state.clientHeight > targetRect.top
-          state.transform = difference < 0 ? -difference : 0
-        } else {
-          state.fixed = state.clientHeight - props.offset < rootRect.bottom
-        }
-      }
+  if (position === 'top') {
+    if (target) {
+      const difference = targetRect.bottom.value - rootHeightOffset
+      fixed.value = offset > rootTop.value && targetRect.bottom.value > 0
+      transform.value = difference < 0 ? difference : 0
+    } else {
+      fixed.value = offset > rootTop.value
     }
+  } else if (target) {
+    const difference =
+      windowHeight.value - targetRect.top.value - rootHeightOffset
+    fixed.value =
+      windowHeight.value - offset < rootBottom.value &&
+      windowHeight.value > targetRect.top.value
+    transform.value = difference < 0 ? -difference : 0
+  } else {
+    fixed.value = windowHeight.value - offset < rootBottom.value
+  }
+}
 
-    const onScroll = () => {
-      update()
+const updateRootRect = async () => {
+  if (!fixed.value) {
+    updateRoot()
+    return
+  }
 
-      emit('scroll', {
-        scrollTop: state.scrollTop,
-        fixed: state.fixed,
-      })
-    }
+  fixed.value = false
+  await nextTick()
+  updateRoot()
+  fixed.value = true
+}
 
-    watch(
-      () => state.fixed,
-      () => {
-        emit('change', state.fixed)
-      }
-    )
+const handleScroll = async () => {
+  updateRoot()
+  await nextTick()
+  emit('scroll', {
+    scrollTop: scrollTop.value,
+    fixed: fixed.value,
+  })
+}
 
-    onMounted(() => {
-      if (props.target) {
-        target.value =
-          document.querySelector<HTMLElement>(props.target) ?? undefined
-        if (!target.value) {
-          throw new Error(`Target is not existed: ${props.target}`)
-        }
-      } else {
-        target.value = document.documentElement
-      }
-      scrollContainer.value = getScrollContainer(root.value!, true)
-    })
+watch(fixed, (val) => emit(CHANGE_EVENT, val))
 
-    useEventListener(scrollContainer, 'scroll', onScroll)
-    useResizeObserver(root, () => update())
-    useResizeObserver(target, () => update())
+onMounted(() => {
+  if (props.target) {
+    target.value =
+      document.querySelector<HTMLElement>(props.target) ?? undefined
+    if (!target.value)
+      throwError(COMPONENT_NAME, `Target does not exist: ${props.target}`)
+  } else {
+    target.value = document.documentElement
+  }
+  scrollContainer.value = getScrollContainer(root.value!, true)
+  updateRoot()
+})
 
-    return {
-      ns,
-      root,
-      state,
-      rootStyle,
-      affixStyle,
-      update,
-    }
-  },
+onActivated(() => {
+  nextTick(updateRootRect)
+})
+
+onDeactivated(() => {
+  fixed.value = false
+})
+
+useEventListener(scrollContainer, 'scroll', handleScroll)
+watchEffect(update)
+
+defineExpose({
+  /** @description update affix status */
+  update,
+  /** @description update rootRect info */
+  updateRoot: updateRootRect,
 })
 </script>

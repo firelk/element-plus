@@ -2,15 +2,15 @@
   <div
     v-show="node.visible"
     ref="node$"
-    class="el-tree-node"
-    :class="{
-      'is-expanded': expanded,
-      'is-current': node.isCurrent,
-      'is-hidden': !node.visible,
-      'is-focusable': !node.disabled,
-      'is-checked': !node.disabled && node.checked,
-      ...getNodeClass(node),
-    }"
+    :class="[
+      ns.b('node'),
+      ns.is('expanded', expanded),
+      ns.is('current', node.isCurrent),
+      ns.is('hidden', !node.visible),
+      ns.is('focusable', !node.disabled),
+      ns.is('checked', !node.disabled && node.checked),
+      getNodeClass(node),
+    ]"
     role="treeitem"
     tabindex="-1"
     :aria-expanded="expanded"
@@ -26,21 +26,21 @@
     @drop.stop="handleDrop"
   >
     <div
-      class="el-tree-node__content"
+      :class="ns.be('node', 'content')"
       :style="{ paddingLeft: (node.level - 1) * tree.props.indent + 'px' }"
     >
       <el-icon
         v-if="tree.props.icon || CaretRight"
         :class="[
+          ns.be('node', 'expand-icon'),
+          ns.is('leaf', node.isLeaf),
           {
-            'is-leaf': node.isLeaf,
             expanded: !node.isLeaf && expanded,
           },
-          'el-tree-node__expand-icon',
         ]"
         @click.stop="handleExpandIconClick"
       >
-        <component :is="tree.props.icon || CaretRight"></component>
+        <component :is="tree.props.icon || CaretRight" />
       </el-icon>
       <el-checkbox
         v-if="showCheckbox"
@@ -52,7 +52,7 @@
       />
       <el-icon
         v-if="node.loading"
-        class="el-tree-node__loading-icon is-loading"
+        :class="[ns.be('node', 'loading-icon'), ns.is('loading')]"
       >
         <loading />
       </el-icon>
@@ -62,9 +62,10 @@
       <div
         v-if="!renderAfterExpand || childNodeRendered"
         v-show="expanded"
-        class="el-tree-node__children"
+        :class="ns.be('node', 'children')"
         role="group"
         :aria-expanded="expanded"
+        @click.stop
       >
         <el-tree-node
           v-for="child in node.childNodes"
@@ -81,31 +82,33 @@
     </el-collapse-transition>
   </div>
 </template>
+
 <script lang="ts">
 import {
   defineComponent,
   getCurrentInstance,
+  inject,
+  nextTick,
+  provide,
   ref,
   watch,
-  nextTick,
-  inject,
-  provide,
 } from 'vue'
-import { isString, isFunction } from '@vue/shared'
+import { debugWarn, isFunction, isString } from '@element-plus/utils'
 import ElCollapseTransition from '@element-plus/components/collapse-transition'
 import ElCheckbox from '@element-plus/components/checkbox'
 import { ElIcon } from '@element-plus/components/icon'
 import { CaretRight, Loading } from '@element-plus/icons-vue'
-import { debugWarn } from '@element-plus/utils-v2'
+import { useNamespace } from '@element-plus/hooks'
 import NodeContent from './tree-node-content.vue'
-import { getNodeKey as getNodeKeyUtil } from './model/util'
+import { getNodeKey as getNodeKeyUtil, handleCurrentChange } from './model/util'
 import { useNodeExpandEventBroadcast } from './model/useNodeExpandEventBroadcast'
 import { dragEventsKey } from './model/useDragNode'
 import Node from './model/node'
+import { NODE_INSTANCE_INJECTION_KEY, ROOT_TREE_INJECTION_KEY } from './tokens'
 
 import type { ComponentInternalInstance, PropType } from 'vue'
-import type { Nullable } from '@element-plus/utils/types'
-import type { TreeOptionProps, TreeNodeData, RootTreeType } from './tree.type'
+import type { RootTreeType, TreeNodeData, TreeOptionProps } from './tree.type'
+import type { CheckboxValueType } from '@element-plus/components/checkbox'
 
 export default defineComponent({
   name: 'ElTreeNode',
@@ -128,24 +131,22 @@ export default defineComponent({
     accordion: Boolean,
     renderContent: Function,
     renderAfterExpand: Boolean,
-    showCheckbox: {
-      type: Boolean,
-      default: false,
-    },
+    showCheckbox: Boolean,
   },
   emits: ['node-expand'],
   setup(props, ctx) {
+    const ns = useNamespace('tree')
     const { broadcastExpanded } = useNodeExpandEventBroadcast(props)
-    const tree = inject<RootTreeType>('RootTree')
+    const tree = inject<RootTreeType>(ROOT_TREE_INJECTION_KEY)!
     const expanded = ref(false)
     const childNodeRendered = ref(false)
-    const oldChecked = ref<boolean>(null)
-    const oldIndeterminate = ref<boolean>(null)
-    const node$ = ref<Nullable<HTMLElement>>(null)
-    const dragEvents = inject(dragEventsKey)
+    const oldChecked = ref<boolean>()
+    const oldIndeterminate = ref<boolean>()
+    const node$ = ref<HTMLElement>()
+    const dragEvents = inject(dragEventsKey)!
     const instance = getCurrentInstance()
 
-    provide('NodeInstance', instance)
+    provide(NODE_INSTANCE_INJECTION_KEY, instance)
     if (!tree) {
       debugWarn('Tree', "Can not find node's tree.")
     }
@@ -155,10 +156,10 @@ export default defineComponent({
       childNodeRendered.value = true
     }
 
-    const childrenKey = tree.props['children'] || 'children'
+    const childrenKey = tree.props.props['children'] || 'children'
     watch(
       () => {
-        const children = props.node.data[childrenKey]
+        const children = props.node.data?.[childrenKey]
         return children && [...children]
       },
       () => {
@@ -181,6 +182,11 @@ export default defineComponent({
     )
 
     watch(
+      () => props.node.childNodes.length,
+      () => props.node.reInitChecked()
+    )
+
+    watch(
       () => props.node.expanded,
       (val) => {
         nextTick(() => (expanded.value = val))
@@ -191,7 +197,9 @@ export default defineComponent({
     )
 
     const getNodeKey = (node: Node): any => {
-      return getNodeKeyUtil(tree.props.nodeKey, node.data)
+      return tree.props.nodeKey
+        ? getNodeKeyUtil(tree.props.nodeKey, node.data)
+        : node.id
     }
 
     const getNodeClass = (node: Node) => {
@@ -226,29 +234,35 @@ export default defineComponent({
     }
 
     const handleClick = (e: MouseEvent) => {
-      const store = tree.store.value
-      store.setCurrentNode(props.node)
-      tree.ctx.emit(
-        'current-change',
-        store.currentNode ? store.currentNode.data : null,
-        store.currentNode
-      )
+      handleCurrentChange(tree.store, tree.ctx.emit, () => {
+        const nodeKeyProp = tree?.props?.nodeKey
+        if (nodeKeyProp) {
+          const curNodeKey = getNodeKey(props.node)
+          tree.store.value.setCurrentNodeKey(curNodeKey)
+        } else {
+          tree.store.value.setCurrentNode(props.node)
+        }
+      })
       tree.currentNode.value = props.node
 
       if (tree.props.expandOnClickNode) {
         handleExpandIconClick()
       }
 
-      if (tree.props.checkOnClickNode && !props.node.disabled) {
-        handleCheckChange(null, {
-          target: { checked: !props.node.checked },
-        })
+      if (
+        (tree.props.checkOnClickNode ||
+          (props.node.isLeaf &&
+            tree.props.checkOnClickLeaf &&
+            props.showCheckbox)) &&
+        !props.node.disabled
+      ) {
+        handleCheckChange(!props.node.checked)
       }
       tree.ctx.emit('node-click', props.node.data, props.node, instance, e)
     }
 
     const handleContextMenu = (event: Event) => {
-      if (tree.instance.vnode.props['onNodeContextmenu']) {
+      if (tree.instance.vnode.props?.['onNodeContextmenu']) {
         event.stopPropagation()
         event.preventDefault()
       }
@@ -267,13 +281,19 @@ export default defineComponent({
         tree.ctx.emit('node-collapse', props.node.data, props.node, instance)
         props.node.collapse()
       } else {
-        props.node.expand()
-        ctx.emit('node-expand', props.node.data, props.node, instance)
+        props.node.expand(() => {
+          ctx.emit('node-expand', props.node.data, props.node, instance)
+        })
       }
     }
 
-    const handleCheckChange = (value, ev) => {
-      props.node.setChecked(ev.target.checked, !tree.props.checkStrictly)
+    const handleCheckChange = (value: CheckboxValueType) => {
+      const checkStrictly = tree?.props.checkStrictly
+      const childNodes = props.node.childNodes
+      if (!checkStrictly && childNodes.length) {
+        value = childNodes.some((node) => !node.isEffectivelyChecked)
+      }
+      props.node.setChecked(value as boolean, !checkStrictly)
       nextTick(() => {
         const store = tree.store.value
         tree.ctx.emit('check', props.node.data, {
@@ -318,6 +338,7 @@ export default defineComponent({
     }
 
     return {
+      ns,
       node$,
       tree,
       expanded,

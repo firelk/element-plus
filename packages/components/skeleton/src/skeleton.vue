@@ -2,7 +2,7 @@
   <template v-if="uiLoading">
     <div :class="[ns.b(), ns.is('animated', animated)]" v-bind="$attrs">
       <template v-for="i in count" :key="i">
-        <slot v-if="loading" :key="i" name="template">
+        <slot v-if="uiLoading" :key="i" name="template">
           <el-skeleton-item :class="ns.is('first')" variant="p" />
           <el-skeleton-item
             v-for="item in rows"
@@ -18,34 +18,31 @@
     </div>
   </template>
   <template v-else>
-    <slot v-bind="$attrs"></slot>
+    <slot v-bind="$attrs" />
   </template>
 </template>
 
-<script lang="ts">
-import { defineComponent, computed } from 'vue'
+<script lang="ts" setup>
+import { toRef } from 'vue'
 import { useNamespace, useThrottleRender } from '@element-plus/hooks'
-import SkeletonItem from './skeleton-item.vue'
-import { skeletonProps } from './skeleton'
+import ElSkeletonItem from './skeleton-item.vue'
 
-export default defineComponent({
+import type { SkeletonProps } from './skeleton.ts'
+
+defineOptions({
   name: 'ElSkeleton',
-  components: {
-    [SkeletonItem.name]: SkeletonItem,
-  },
-  props: skeletonProps,
-  setup(props) {
-    const ns = useNamespace('skeleton')
-    const innerLoading = computed(() => {
-      return props.loading
-    })
+})
+const props = withDefaults(defineProps<SkeletonProps>(), {
+  loading: true,
+  count: 1,
+  rows: 3,
+})
 
-    const uiLoading = useThrottleRender(innerLoading, props.throttle)
+const ns = useNamespace('skeleton')
+const uiLoading = useThrottleRender(toRef(props, 'loading'), props.throttle)
 
-    return {
-      ns,
-      uiLoading,
-    }
-  },
+defineExpose({
+  /** @description loading state */
+  uiLoading,
 })
 </script>

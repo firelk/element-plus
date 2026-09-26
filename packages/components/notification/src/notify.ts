@@ -1,24 +1,27 @@
-import { createVNode, render } from 'vue'
-import { isClient } from '@vueuse/core'
-import { useZIndex } from '@element-plus/hooks'
-import { isVNode, debugWarn } from '@element-plus/utils-v2'
+import { createVNode, isVNode, render } from 'vue'
+import {
+  debugWarn,
+  isClient,
+  isElement,
+  isFunction,
+  isString,
+  isUndefined,
+} from '@element-plus/utils'
 import NotificationConstructor from './notification.vue'
 import { notificationTypes } from './notification'
 
-import type { ComponentPublicInstance, VNode } from 'vue'
+import type { VNode } from 'vue'
 import type {
-  NotificationOptions,
+  NotificationExposed,
+  NotificationPosition,
+  NotificationProps,
+  NotificationQueue,
   Notify,
   NotifyFn,
-  NotificationQueue,
-  NotificationProps,
 } from './notification'
 
 // This should be a queue but considering there were `non-autoclosable` notifications.
-const notifications: Record<
-  NotificationOptions['position'],
-  NotificationQueue
-> = {
+const notifications: Record<NotificationPosition, NotificationQueue> = {
   'top-left': [],
   'top-right': [],
   'bottom-left': [],
@@ -29,10 +32,10 @@ const notifications: Record<
 const GAP_SIZE = 16
 let seed = 1
 
-const notify: NotifyFn & Partial<Notify> = function (options = {}) {
+const notify: NotifyFn & Partial<Notify> = function (options = {}, context) {
   if (!isClient) return { close: () => undefined }
 
-  if (typeof options === 'string' || isVNode(options)) {
+  if (isString(options) || isVNode(options)) {
     options = { message: options }
   }
 
@@ -44,15 +47,11 @@ const notify: NotifyFn & Partial<Notify> = function (options = {}) {
   })
   verticalOffset += GAP_SIZE
 
-  const { nextZIndex } = useZIndex()
-
   const id = `notification_${seed++}`
   const userOnClose = options.onClose
   const props: Partial<NotificationProps> = {
-    // default options end
-    zIndex: nextZIndex(),
-    offset: verticalOffset,
     ...options,
+    offset: verticalOffset,
     id,
     onClose: () => {
       close(id, position, userOnClose)
@@ -60,14 +59,14 @@ const notify: NotifyFn & Partial<Notify> = function (options = {}) {
   }
 
   let appendTo: HTMLElement | null = document.body
-  if (options.appendTo instanceof HTMLElement) {
+  if (isElement(options.appendTo)) {
     appendTo = options.appendTo
-  } else if (typeof options.appendTo === 'string') {
+  } else if (isString(options.appendTo)) {
     appendTo = document.querySelector(options.appendTo)
   }
 
   // should fallback to default value with a warning
-  if (!(appendTo instanceof HTMLElement)) {
+  if (!isElement(appendTo)) {
     debugWarn(
       'ElNotification',
       'the appendTo option is not an HTMLElement. Falling back to document.body.'
@@ -80,12 +79,13 @@ const notify: NotifyFn & Partial<Notify> = function (options = {}) {
   const vm = createVNode(
     NotificationConstructor,
     props,
-    isVNode(props.message)
-      ? {
-          default: () => props.message,
-        }
-      : null
+    isFunction(props.message)
+      ? props.message
+      : isVNode(props.message)
+        ? () => props.message
+        : null
   )
+  vm.appContext = isUndefined(context) ? notify._context : context
 
   // clean notification element preventing mem leak
   vm.props!.onDestroy = () => {
@@ -100,24 +100,21 @@ const notify: NotifyFn & Partial<Notify> = function (options = {}) {
   return {
     // instead of calling the onClose function directly, setting this value so that we can have the full lifecycle
     // for out component, so that all closing steps will not be skipped.
+    // UPDATE: call the exposed close() here rather than setting visible.value = false,
+    // because close() also runs clearTimer() to stop the progress tick and close timeout.
     close: () => {
-      ;(
-        vm.component!.proxy as ComponentPublicInstance<{ visible: boolean }>
-      ).visible = false
+      ;(vm.component!.exposed as NotificationExposed).close()
     },
   }
 }
 notificationTypes.forEach((type) => {
-  notify[type] = (options = {}) => {
-    if (typeof options === 'string' || isVNode(options)) {
+  notify[type] = (options = {}, appContext) => {
+    if (isString(options) || isVNode(options)) {
       options = {
         message: options,
       }
     }
-    return notify({
-      ...options,
-      type,
-    })
+    return notify({ ...options, type }, appContext)
   }
 })
 
@@ -131,7 +128,7 @@ notificationTypes.forEach((type) => {
  */
 export function close(
   id: string,
-  position: NotificationOptions['position'],
+  position: NotificationPosition,
   userOnClose?: (vm: VNode) => void
 ): void {
   // maybe we can store the index when inserting the vm to notification list.
@@ -155,7 +152,8 @@ export function close(
   for (let i = idx; i < len; i++) {
     // new position equals the current offsetTop minus removed height plus 16px(the gap size between each item)
     const { el, component } = orientedNotifications[i].vm
-    const pos = parseInt(el!.style[verticalPos], 10) - removedHeight - GAP_SIZE
+    const pos =
+      Number.parseInt(el!.style[verticalPos], 10) - removedHeight - GAP_SIZE
     component!.props.offset = pos
   }
 }
@@ -165,13 +163,24 @@ export function closeAll(): void {
   for (const orientedNotifications of Object.values(notifications)) {
     orientedNotifications.forEach(({ vm }) => {
       // same as the previous close method, we'd like to make sure lifecycle gets handle properly.
-      ;(
-        vm.component!.proxy as ComponentPublicInstance<{ visible: boolean }>
-      ).visible = false
+      // UPDATE: call exposed close() so that clearTimer() also runs.
+      ;(vm.component!.exposed as NotificationExposed).close()
     })
   }
 }
 
+export function updateOffsets(position: NotificationPosition = 'top-right') {
+  let verticalOffset =
+    notifications[position][0]?.vm.component?.props?.offset || 0
+
+  for (const { vm } of notifications[position]) {
+    vm.component!.props.offset = verticalOffset
+    verticalOffset += (vm.el?.offsetHeight || 0) + GAP_SIZE
+  }
+}
+
 notify.closeAll = closeAll
+notify.updateOffsets = updateOffsets
+notify._context = null
 
 export default notify as Notify

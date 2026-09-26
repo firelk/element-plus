@@ -1,12 +1,16 @@
 <template>
-  <el-select v-model="value" filterable placeholder="Select">
+  <el-select
+    v-model="value"
+    filterable
+    placeholder="Select"
+    style="width: 240px"
+  >
     <el-option
       v-for="item in options"
       :key="item.value"
       :label="item.label"
       :value="item.value"
-    >
-    </el-option>
+    />
   </el-select>
 </template>
 

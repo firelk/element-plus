@@ -1,6 +1,12 @@
-import type { CSSProperties, VNode, Component } from 'vue'
+import { buttonTypes } from '@element-plus/components/button'
 
-type MessageType = '' | 'success' | 'warning' | 'info' | 'error'
+import type { AppContext, Component, VNode } from 'vue'
+import type { ComponentSize } from '@element-plus/constants'
+import type { InputType } from '@element-plus/components/input/src/input'
+import type { CSSProperties } from '@element-plus/utils'
+
+type MessageType = '' | 'primary' | 'success' | 'warning' | 'info' | 'error'
+type MessageBoxButtonType = (typeof buttonTypes)[number]
 
 export type Action = 'confirm' | 'close' | 'cancel'
 export type MessageBoxType = '' | 'prompt' | 'alert' | 'confirm'
@@ -10,22 +16,29 @@ export interface MessageBoxInputData {
   action: Action
 }
 
-export interface MessageBoxInputValidator {
-  (value: string): boolean | string
+export type MessageBoxInputValidator =
+  ((value: string) => boolean | string) | undefined
+export type CloseFn = () => void
+export interface MessageBoxActionHandlers {
+  confirm: CloseFn
+  cancel: CloseFn
+  close: CloseFn
 }
 
 export declare interface MessageBoxState {
-  title: string
+  autofocus: boolean
+  title: string | undefined
   message: string
   type: MessageType
   icon: string | Component
-  customClass: string
+  closeIcon: string | Component
+  customClass: string // todo: use ClassValue, TS Error: ts-plugin(2589)
   customStyle: CSSProperties
   showInput: boolean
   inputValue: string
   inputPlaceholder: string
-  inputType: string
-  inputPattern: RegExp
+  inputType: InputType
+  inputPattern: RegExp | null
   inputValidator: MessageBoxInputValidator
   inputErrorMessage: string
   showConfirmButton: boolean
@@ -34,8 +47,12 @@ export declare interface MessageBoxState {
   dangerouslyUseHTMLString: boolean
   confirmButtonText: string
   cancelButtonText: string
+  confirmButtonType: MessageBoxButtonType
+  cancelButtonType: MessageBoxButtonType
   confirmButtonLoading: boolean
   cancelButtonLoading: boolean
+  confirmButtonLoadingIcon: string | Component
+  cancelButtonLoadingIcon: string | Component
   confirmButtonClass: string
   confirmButtonDisabled: boolean
   cancelButtonClass: string
@@ -56,11 +73,15 @@ export declare interface MessageBoxState {
 }
 
 export type Callback =
-  | ((value: string, action: Action) => any)
-  | ((action: Action) => any)
+  ((value: string, action: Action) => any) | ((action: Action) => any)
 
 /** Options used in MessageBox */
 export interface ElMessageBoxOptions {
+  /**
+   * auto focus when open message-box
+   */
+  autofocus?: boolean
+
   /** Callback before MessageBox closes, and it will prevent MessageBox from closing */
   beforeClose?: (
     action: Action,
@@ -74,6 +95,12 @@ export interface ElMessageBoxOptions {
   /** Custom inline style for MessageBox */
   customStyle?: CSSProperties
 
+  /** Whether a mask is displayed */
+  modal?: boolean
+
+  /** modal class name for MessageBox */
+  modalClass?: string
+
   /** MessageBox closing callback if you don't prefer Promise */
   callback?: Callback
 
@@ -82,6 +109,18 @@ export interface ElMessageBoxOptions {
 
   /** Text content of confirm button */
   confirmButtonText?: string
+
+  /** Type of cancel button */
+  cancelButtonType?: MessageBoxButtonType
+
+  /** Type of confirm button */
+  confirmButtonType?: MessageBoxButtonType
+
+  /** Loading Icon content of cancel button */
+  cancelButtonLoadingIcon?: string | Component
+
+  /** Loading Icon content of confirm button */
+  confirmButtonLoadingIcon?: string | Component
 
   /** Custom class name of cancel button */
   cancelButtonClass?: string
@@ -95,11 +134,14 @@ export interface ElMessageBoxOptions {
   /** Whether MessageBox can be drag */
   draggable?: boolean
 
+  /** Draggable MessageBox can overflow the viewport */
+  overflow?: boolean
+
   /** Content of the MessageBox */
-  message?: string | VNode
+  message?: string | VNode | ((params: MessageBoxActionHandlers) => VNode)
 
   /** Title of the MessageBox */
-  title?: string
+  title?: string | ElMessageBoxOptions
 
   /** Message type, used for icon display */
   type?: MessageType
@@ -109,6 +151,9 @@ export interface ElMessageBoxOptions {
 
   /** Custom icon component */
   icon?: string | Component
+
+  /** Custom close icon component */
+  closeIcon?: string | Component
 
   /** Whether message is treated as HTML string */
   dangerouslyUseHTMLString?: boolean
@@ -152,32 +197,45 @@ export interface ElMessageBoxOptions {
   /** Regexp for the input */
   inputPattern?: RegExp
 
-  /** Input Type: text, textArea, password or number */
-  inputType?: string
+  /** type of input, see more in [MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input#Form_%3Cinput%3E_types) */
+  inputType?: InputType
 
   /** Validation function for the input. Should returns a boolean or string. If a string is returned, it will be assigned to inputErrorMessage */
   inputValidator?: MessageBoxInputValidator
 
   /** Error message when validation fails */
   inputErrorMessage?: string
+
+  /** Custom size of confirm and cancel buttons */
+  buttonSize?: ComponentSize
+
+  /** Custom element to append the message box to */
+  appendTo?: HTMLElement | string
 }
 
 export type ElMessageBoxShortcutMethod = ((
   message: ElMessageBoxOptions['message'],
-  title: ElMessageBoxOptions['title'],
-  options?: ElMessageBoxOptions
+  options?: ElMessageBoxOptions,
+  appContext?: AppContext | null
 ) => Promise<MessageBoxData>) &
   ((
     message: ElMessageBoxOptions['message'],
-    options?: ElMessageBoxOptions
+    title: ElMessageBoxOptions['title'],
+    options?: ElMessageBoxOptions,
+    appContext?: AppContext | null
   ) => Promise<MessageBoxData>)
 
 export interface IElMessageBox {
+  _context: AppContext | null
+
   /** Show a message box */
   // (message: string, title?: string, type?: string): Promise<MessageBoxData>
 
   /** Show a message box */
-  (options: ElMessageBoxOptions): Promise<MessageBoxData>
+  (
+    options: ElMessageBoxOptions,
+    appContext?: AppContext | null
+  ): Promise<MessageBoxData>
 
   /** Show an alert message box */
   alert: ElMessageBoxShortcutMethod
@@ -189,5 +247,5 @@ export interface IElMessageBox {
   prompt: ElMessageBoxShortcutMethod
 
   /** Close current message box */
-  close(): void
+  close: CloseFn
 }

@@ -1,94 +1,75 @@
-import { buildProps, definePropType } from '@element-plus/utils-v2'
-import {
-  usePopperTriggerProps,
-  usePopperContentProps,
+import { buildProps } from '@element-plus/utils'
+import { createModelToggleComposable } from '@element-plus/hooks'
+import { popperArrowProps, popperProps } from '@element-plus/components/popper'
+import { useTooltipContentProps } from './content'
+import { useTooltipTriggerProps } from './trigger'
+
+import type {
+  PopperArrowProps,
+  PopperProps,
 } from '@element-plus/components/popper'
-import {
-  useDelayedToggleProps,
-  POPPER_CONTAINER_SELECTOR,
-} from '@element-plus/hooks'
+import type { ElTooltipContentProps } from './content'
+import type { UseTooltipTriggerProps } from './trigger'
+import type Tooltip from './tooltip.vue'
+import type { ExtractPublicPropTypes } from 'vue'
 
-import type { ExtractPropTypes, PropType } from 'vue'
+export const {
+  useModelToggleProps: useTooltipModelToggleProps,
+  useModelToggleEmits: useTooltipModelToggleEmits,
+  useModelToggle: useTooltipModelToggle,
+} = createModelToggleComposable('visible' as const)
 
-const triggers = ['hover', 'focus', 'click', 'contextmenu'] as const
-
-export type Trigger = typeof triggers[number]
-
-export const useTooltipContentProps = {
-  ...useDelayedToggleProps,
-  ...usePopperContentProps,
-  ...buildProps({
-    appendTo: {
-      type: definePropType<string | HTMLElement>([String, Object]),
-      default: POPPER_CONTAINER_SELECTOR,
-    },
-    content: {
-      type: String,
-      default: '',
-    },
-    rawContent: {
-      type: Boolean,
-      default: false,
-    },
-    persistent: Boolean,
-    ariaLabel: String,
-    // because model toggle prop is generated dynamically
-    // so the typing cannot be evaluated by typescript as type:
-    // [name]: { type: Boolean, default: null }
-    // so we need to declare that again for type checking.
-    visible: {
-      type: definePropType<boolean | null>(Boolean),
-      default: null,
-    },
-    transition: {
-      type: String,
-      default: 'el-fade-in-linear',
-    },
-    teleported: {
-      type: Boolean,
-      default: true,
-    },
-    disabled: {
-      type: Boolean,
-    },
-  } as const),
+export interface UseTooltipProps
+  extends
+    PopperProps,
+    ElTooltipContentProps,
+    UseTooltipTriggerProps,
+    PopperArrowProps {
+  /**
+   * @description whether the tooltip content has an arrow
+   */
+  showArrow?: boolean
+  'onUpdate:visible'?: (value: boolean) => void
 }
 
-export const useTooltipTriggerProps = {
-  ...usePopperTriggerProps,
-  disabled: Boolean,
-  trigger: {
-    type: [String, Array] as PropType<Trigger | Trigger[]>,
-    default: 'hover',
-  },
-}
-
+/**
+ * @deprecated Removed after 3.0.0, Use `UseTooltipProps` instead.
+ */
 export const useTooltipProps = buildProps({
-  openDelay: {
-    type: Number,
-  },
-  visibleArrow: {
-    type: Boolean,
-    default: undefined,
-  },
-  hideAfter: {
-    type: Number,
-    default: 200,
-  },
+  ...popperProps,
+  ...useTooltipModelToggleProps,
+  ...useTooltipContentProps,
+  ...useTooltipTriggerProps,
+  ...popperArrowProps,
+  /**
+   * @description whether the tooltip content has an arrow
+   */
   showArrow: {
     type: Boolean,
     default: true,
   },
 })
 
-export type ElTooltipContentProps = ExtractPropTypes<
-  typeof useTooltipContentProps
+export const tooltipEmits = [
+  ...useTooltipModelToggleEmits,
+  'before-show',
+  'before-hide',
+  'show',
+  'hide',
+  'open',
+  'close',
+] as const
+
+/**
+ * @deprecated Removed after 3.0.0, Use `UseTooltipProps` instead.
+ */
+export type ElTooltipProps = UseTooltipProps
+
+/**
+ * @deprecated Removed after 3.0.0, Use `UseTooltipProps` instead.
+ */
+export type ElTooltipPropsPublic = ExtractPublicPropTypes<
+  typeof useTooltipProps
 >
 
-export type ElTooltipTriggerProps = ExtractPropTypes<
-  typeof useTooltipTriggerProps
->
-
-export type ElTooltipProps = ExtractPropTypes<typeof useTooltipProps> &
-  ElTooltipContentProps &
-  ElTooltipTriggerProps
+export type TooltipInstance = InstanceType<typeof Tooltip> & unknown

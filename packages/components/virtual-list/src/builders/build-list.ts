@@ -1,36 +1,49 @@
 import {
+  Fragment,
   computed,
   defineComponent,
   getCurrentInstance,
-  ref,
+  h,
+  mergeProps,
   nextTick,
+  onActivated,
   onMounted,
   onUpdated,
+  ref,
   resolveDynamicComponent,
-  h,
   unref,
+  watch,
 } from 'vue'
-import { isClient } from '@vueuse/core'
-import { hasOwn, isNumber, isString } from '@element-plus/utils-v2'
+import { clamp, useEventListener } from '@vueuse/core'
+import {
+  hasOwn,
+  isClient,
+  isGreaterThan,
+  isNumber,
+  isString,
+} from '@element-plus/utils'
+import { useNamespace } from '@element-plus/hooks'
 import { useCache } from '../hooks/use-cache'
 import useWheel from '../hooks/use-wheel'
 import Scrollbar from '../components/scrollbar'
-import { getScrollDir, isHorizontal, getRTLOffsetType } from '../utils'
+import { getRTLOffsetType, getScrollDir, isHorizontal } from '../utils'
 import { virtualizedListProps } from '../props'
 import {
   AUTO_ALIGNMENT,
   BACKWARD,
+  END_REACHED_EVT,
   FORWARD,
-  RTL,
   HORIZONTAL,
   ITEM_RENDER_EVT,
-  SCROLL_EVT,
+  RTL,
   RTL_OFFSET_NAG,
+  RTL_OFFSET_POS_ASC,
   RTL_OFFSET_POS_DESC,
+  SCROLL_EVT,
 } from '../defaults'
 
-import type { VNode, CSSProperties, Slot, VNodeChild } from 'vue'
-import type { ListConstructorProps, Alignment } from '../types'
+import type { CSSProperties, Slot, VNode, VNodeChild } from 'vue'
+import type { Alignment, ListConstructorProps, ScrollDirection } from '../types'
 import type { VirtualizedListProps } from '../props'
 
 const createList = ({
@@ -48,13 +61,16 @@ const createList = ({
   return defineComponent({
     name: name ?? 'ElVirtualList',
     props: virtualizedListProps,
-    emits: [ITEM_RENDER_EVT, SCROLL_EVT],
+    emits: [ITEM_RENDER_EVT, SCROLL_EVT, END_REACHED_EVT],
     setup(props, { emit, expose }) {
       validateProps(props)
       const instance = getCurrentInstance()!
+
+      const ns = useNamespace('vl')
+
       const dynamicSizeCache = ref(initCache(props, instance))
 
-      const getItemStyleCache = useCache()
+      const getItemStyleCache = useCache<CSSProperties>()
       // refs
       // here windowRef and innerRef can be type of HTMLElement
       // or user defined component type, depends on the type passed
@@ -64,13 +80,12 @@ const createList = ({
       const scrollbarRef = ref()
       const states = ref({
         isScrolling: false,
-        scrollDir: 'forward',
+        scrollDir: FORWARD as ScrollDirection,
         scrollOffset: isNumber(props.initScrollOffset)
           ? props.initScrollOffset
           : 0,
         updateRequested: false,
         isScrollbarDragging: false,
-        scrollbarAlwaysOn: props.scrollbarAlwaysOn,
       })
 
       // computed
@@ -116,7 +131,7 @@ const createList = ({
       const windowStyle = computed(() => [
         {
           position: 'relative',
-          overflow: 'hidden',
+          [`overflow-${_isHorizontal.value ? 'x' : 'y'}`]: 'scroll',
           WebkitOverflowScrolling: 'touch',
           willChange: 'transform',
         },
@@ -131,10 +146,21 @@ const createList = ({
       const innerStyle = computed(() => {
         const size = unref(estimatedTotalSize)
         const horizontal = unref(_isHorizontal)
+        const innerWidth = props.innerWidth
         return {
           height: horizontal ? '100%' : `${size}px`,
           pointerEvents: unref(states).isScrolling ? 'none' : undefined,
-          width: horizontal ? `${size}px` : '100%',
+          width: horizontal
+            ? `${size}px`
+            : innerWidth !== undefined
+              ? isNumber(innerWidth)
+                ? `${innerWidth}px`
+                : innerWidth
+              : '100%',
+
+          // fix scrolling issues in Firefox.
+          margin: 0,
+          boxSizing: 'border-box',
         }
       })
 
@@ -142,29 +168,59 @@ const createList = ({
         _isHorizontal.value ? props.width : props.height
       )
 
+      const maxOffset = computed(() =>
+        Math.max(0, estimatedTotalSize.value - (clientSize.value as number))
+      )
+
+      const normalizeOffset = (offset: number) =>
+        clamp(offset, 0, maxOffset.value)
+
+      // Tolerance must cover sub-pixel differences that arise when the
+      // browser's actual scrollHeight−clientHeight (affected by DPR
+      // rounding) doesn't exactly match our computed maxOffset.
+      // Without this, the native scroll event after onUpdated resets
+      // edgeState and causes a duplicate end-reached emission.
+      const EDGE_TOLERANCE = 1
+
+      const getEdgeState = (normalizedOffset: number) => ({
+        start: !isGreaterThan(normalizedOffset, 0, EDGE_TOLERANCE),
+        end: !isGreaterThan(maxOffset.value, normalizedOffset, EDGE_TOLERANCE),
+      })
+
+      const normalizedScrollOffset = computed(() =>
+        normalizeOffset(states.value.scrollOffset)
+      )
+      const currentEdgeState = computed(() =>
+        getEdgeState(normalizedScrollOffset.value)
+      )
+
+      let edgeState = currentEdgeState.value
+
+      const startEdgeReached = computed(() => currentEdgeState.value.start)
+      const endEdgeReached = computed(() => currentEdgeState.value.end)
+
       // methods
       const { onWheel } = useWheel(
         {
-          atStartEdge: computed(() => states.value.scrollOffset <= 0),
-          atEndEdge: computed(
-            () => states.value.scrollOffset >= estimatedTotalSize.value
-          ),
+          atStartEdge: startEdgeReached,
+          atEndEdge: endEdgeReached,
           layout: computed(() => props.layout),
         },
         (offset) => {
           ;(
-            scrollbarRef.value as any as {
+            scrollbarRef.value as {
               onMouseUp: () => void
             }
           ).onMouseUp?.()
           scrollTo(
-            Math.min(
-              states.value.scrollOffset + offset,
-              estimatedTotalSize.value - (clientSize.value as number)
-            )
+            Math.min(states.value.scrollOffset + offset, maxOffset.value)
           )
         }
       )
+
+      useEventListener(windowRef, 'wheel', onWheel, {
+        passive: false,
+      })
 
       const emitEvents = () => {
         const { total } = props
@@ -179,6 +235,53 @@ const createList = ({
         emit(SCROLL_EVT, scrollDir, scrollOffset, updateRequested)
       }
 
+      const emitEndReached = (direction: ScrollDirection, offset: number) => {
+        const nextEdgeState = getEdgeState(offset)
+        const horizontalEnd = props.direction === RTL ? 'left' : 'right'
+        const horizontalStart = props.direction === RTL ? 'right' : 'left'
+
+        if (direction === FORWARD && nextEdgeState.end && !edgeState.end) {
+          emit(END_REACHED_EVT, _isHorizontal.value ? horizontalEnd : 'bottom')
+        }
+
+        if (direction === BACKWARD && nextEdgeState.start && !edgeState.start) {
+          emit(END_REACHED_EVT, _isHorizontal.value ? horizontalStart : 'top')
+        }
+
+        edgeState = nextEdgeState
+      }
+
+      const updateScrollOffset = (
+        offset: number,
+        {
+          isScrolling,
+          updateRequested,
+        }: {
+          isScrolling: boolean
+          updateRequested: boolean
+        }
+      ) => {
+        const currentState = unref(states)
+        const nextOffset = Math.max(offset, 0)
+
+        if (nextOffset === currentState.scrollOffset) {
+          return
+        }
+
+        const scrollDir = getScrollDir(currentState.scrollOffset, nextOffset)
+
+        states.value = {
+          ...currentState,
+          isScrolling,
+          scrollDir,
+          scrollOffset: nextOffset,
+          updateRequested,
+        }
+        emitEndReached(scrollDir, normalizeOffset(nextOffset))
+
+        nextTick(resetIsScrolling)
+      }
+
       const scrollVertically = (e: Event) => {
         const { clientHeight, scrollHeight, scrollTop } =
           e.currentTarget as HTMLElement
@@ -187,20 +290,10 @@ const createList = ({
           return
         }
 
-        const scrollOffset = Math.max(
-          0,
-          Math.min(scrollTop, scrollHeight - clientHeight)
-        )
-
-        states.value = {
-          ..._states,
+        updateScrollOffset(Math.min(scrollTop, scrollHeight - clientHeight), {
           isScrolling: true,
-          scrollDir: getScrollDir(_states.scrollOffset, scrollOffset),
-          scrollOffset,
           updateRequested: false,
-        }
-
-        nextTick(resetIsScrolling)
+        })
       }
 
       const scrollHorizontally = (e: Event) => {
@@ -233,20 +326,10 @@ const createList = ({
           }
         }
 
-        scrollOffset = Math.max(
-          0,
-          Math.min(scrollOffset, scrollWidth - clientWidth)
-        )
-
-        states.value = {
-          ..._states,
+        updateScrollOffset(Math.min(scrollOffset, scrollWidth - clientWidth), {
           isScrolling: true,
-          scrollDir: getScrollDir(_states.scrollOffset, scrollOffset),
-          scrollOffset,
           updateRequested: false,
-        }
-
-        nextTick(resetIsScrolling)
+        })
       }
 
       const onScroll = (e: Event) => {
@@ -255,33 +338,15 @@ const createList = ({
       }
 
       const onScrollbarScroll = (distanceToGo: number, totalSteps: number) => {
-        const offset =
-          ((estimatedTotalSize.value - (clientSize.value as number)) /
-            totalSteps) *
-          distanceToGo
-        scrollTo(
-          Math.min(
-            estimatedTotalSize.value - (clientSize.value as number),
-            offset
-          )
-        )
+        const offset = (maxOffset.value / totalSteps) * distanceToGo
+        scrollTo(Math.min(maxOffset.value, offset))
       }
 
       const scrollTo = (offset: number) => {
-        offset = Math.max(offset, 0)
-
-        if (offset === unref(states).scrollOffset) {
-          return
-        }
-
-        states.value = {
-          ...unref(states),
-          scrollOffset: offset,
-          scrollDir: getScrollDir(unref(states).scrollOffset, offset),
+        updateScrollOffset(offset, {
+          isScrolling: unref(states).isScrolling,
           updateRequested: true,
-        }
-
-        nextTick(resetIsScrolling)
+        })
       }
 
       const scrollToItem = (
@@ -334,12 +399,9 @@ const createList = ({
         return style
       }
 
-      // TODO:
-      // perf optimization here, reset isScrolling with debounce.
+      // TODO: perf optimization here, reset isScrolling with debounce.
 
       const resetIsScrolling = () => {
-        // timer = null
-
         states.value.isScrolling = false
         nextTick(() => {
           getItemStyleCache.value(-1, null, null)
@@ -381,11 +443,11 @@ const createList = ({
               // This is not the case for all browsers though (e.g. Chrome reports values as positive, measured relative to the left).
               // So we need to determine which browser behavior we're dealing with, and mimic it.
               switch (getRTLOffsetType()) {
-                case 'negative': {
+                case RTL_OFFSET_NAG: {
                   windowElement.scrollLeft = -scrollOffset
                   break
                 }
-                case 'positive-ascending': {
+                case RTL_OFFSET_POS_ASC: {
                   windowElement.scrollLeft = scrollOffset
                   break
                 }
@@ -405,7 +467,16 @@ const createList = ({
         }
       })
 
+      onActivated(() => {
+        unref(windowRef)!.scrollTop = unref(states).scrollOffset
+      })
+
+      watch(maxOffset, () => {
+        edgeState = currentEdgeState.value
+      })
+
       const api = {
+        ns,
         clientSize,
         estimatedTotalSize,
         windowStyle,
@@ -449,13 +520,14 @@ const createList = ({
         itemsToRender,
         innerStyle,
         layout,
+        scrollbarAlwaysOn,
         total,
         onScroll,
         onScrollbarScroll,
-        onWheel,
         states,
         useIsScrolling,
         windowStyle,
+        ns,
       } = ctx
 
       const [start, end] = itemsToRender
@@ -468,13 +540,16 @@ const createList = ({
       if (total > 0) {
         for (let i = start; i <= end; i++) {
           children.push(
-            ($slots.default as Slot)?.({
-              data,
-              key: i,
-              index: i,
-              isScrolling: useIsScrolling ? states.isScrolling : undefined,
-              style: getItemStyle(i),
-            })
+            h(
+              Fragment,
+              { key: i },
+              ($slots.default as Slot)?.({
+                data,
+                index: i,
+                isScrolling: useIsScrolling ? states.isScrolling : undefined,
+                style: getItemStyle(i),
+              })
+            )
           )
         }
       }
@@ -482,10 +557,10 @@ const createList = ({
       const InnerNode = [
         h(
           Inner as VNode,
-          {
+          mergeProps(ctx.innerProps, {
             style: innerStyle,
             ref: 'innerRef',
-          },
+          }),
           !isString(Inner)
             ? {
                 default: () => children,
@@ -503,15 +578,15 @@ const createList = ({
         scrollFrom:
           states.scrollOffset / (this.estimatedTotalSize - clientSize),
         total,
+        alwaysOn: scrollbarAlwaysOn,
       })
 
       const listContainer = h(
         Container as VNode,
         {
-          class: className,
+          class: [ns.e('window'), className],
           style: windowStyle,
           onScroll,
-          onWheel,
           ref: 'windowRef',
           key: 0,
         },
@@ -522,10 +597,7 @@ const createList = ({
         'div',
         {
           key: 0,
-          class: [
-            'el-vl__wrapper',
-            states.scrollbarAlwaysOn ? 'always-on' : '',
-          ],
+          class: [ns.e('wrapper'), scrollbarAlwaysOn ? 'always-on' : ''],
         },
         [listContainer, scrollbar]
       )
